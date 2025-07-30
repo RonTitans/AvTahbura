@@ -1,0 +1,60 @@
+{
+  "name": "municipal-inquiry-system",
+  "version": "1.0.0",
+  "description": "Jerusalem Municipal Transportation Inquiry System",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:quality": "node tests/qualityAnalysis.js",
+    "test:full": "node tests/testRunner.js",
+    "test:response-quality": "jest tests/responseQuality.test.js",
+    "test:thresholds": "jest tests/thresholdConfiguration.test.js",
+    "test:api": "jest tests/apiResponseStructure.test.js",
+    "test:data": "jest tests/dataProcessing.test.js",
+    "test:integration": "jest tests/integration.test.js"
+  },
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "google-auth-library": "^9.6.3",
+    "googleapis": "^131.0.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.28.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "server.js",
+      "**/*.js",
+      "!node_modules/**",
+      "!coverage/**"
+    ],
+    "coverageReporters": ["text", "lcov", "html"],
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    }
+  }
+}
