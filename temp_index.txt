@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת פניות תחבורה - עיריית ירושלים</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            color: white;
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: all 0.3s ease;
+            direction: rtl;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .spinner {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+            margin-top: 40px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-section {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .result-title {
+            color: #2d3748;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .result-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .exact-match .result-icon {
+            background: #48bb78;
+            color: white;
+        }
+
+        .ai-response .result-icon {
+            background: #667eea;
+            color: white;
+        }
+
+        .no-match {
+            color: #e53e3e;
+            text-align: center;
+            padding: 20px;
+            background: #fff5f5;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .result-content {
+            color: #4a5568;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .related-matches {
+            margin-top: 20px;
+        }
+
+        .related-match {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .related-match:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .match-score {
+            display: inline-block;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🚌</div>
+            <h1>מערכת פניות תחבורה</h1>
+            <p class="subtitle">עיריית ירושלים - מחלקת תחבורה ציבורית</p>
+        </div>
+
+        <form id="inquiryForm">
+            <div class="form-group">
+                <label for="inquiry">הזן את הפנייה שלך:</label>
+                <textarea 
+                    id="inquiry" 
+                    name="inquiry" 
+                    placeholder="לדוגמה: קו 408 שינוי מסלול בית שמש"
+                    required
+                ></textarea>
+            </div>
+            <button type="submit">שלח פנייה</button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>מעבד את הפנייה שלך...</p>
+        </div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('inquiryForm');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const inquiryInput = document.getElementById('inquiry');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const inquiry = inquiryInput.value.trim();
+            if (!inquiry) return;
+
+            // Show loading, hide results
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            form.querySelector('button').disabled = true;
+
+            try {
+                const response = await fetch('http://localhost:8009/recommend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        inquiry_text: inquiry,
+                        max_recommendations: 5
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('שגיאה בשליחת הפנייה');
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                console.error('Error:', error);
+                results.innerHTML = `
+                    <div class="no-match">
+                        <p>אירעה שגיאה בעיבוד הפנייה. אנא נסה שנית.</p>
+                    </div>
+                `;
+                results.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                form.querySelector('button').disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            let html = '';
+
+            // Display original inquiry
+            html += `
+                <div class="result-section">
+                    <div class="result-title">
+                        <span class="result-icon">📝</span>
+                        הפנייה שלך:
+                    </div>
+                    <div class="result-content">${escapeHtml(data.inquiry)}</div>
+                </div>
+            `;
+
+            // Display exact match or no match message
+            if (data.exact_match) {
+                html += `
+                    <div class="result-section exact-match">
+                        <div class="result-title">
+                            <span class="result-icon">✓</span>
+                            נמצאה תשובה מדויקת ממאגר הנתונים:
+                        </div>
+                        <div class="result-content">${escapeHtml(data.exact_match.original_response)}</div>
+                    </div>
+                `;
+            } else if (data.related_matches && data.related_matches.length > 0) {
+                html += `
+                    <div class="result-section">
+                        <div class="result-title">
+                            <span class="result-icon">🔍</span>
+                            פניות דומות שנמצאו:
+                        </div>
+                        <div class="related-matches">
+                `;
+                
+                data.related_matches.forEach(match => {
+                    html += `
+                        <div class="related-match">
+                            <span class="match-score">רלוונטיות: ${match.relevance_score}</span>
+                            <strong>${escapeHtml(match.description)}</strong>
+                            <div class="result-content" style="margin-top: 10px;">${escapeHtml(match.original_response)}</div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            } else {
+                html += `
+                    <div class="no-match">
+                        <p>לא נמצאה התאמה מדויקת במאגר הנתונים</p>
+                    </div>
+                `;
+            }
+
+            // Display AI-enhanced response
+            if (data.enhanced_response) {
+                html += `
+                    <div class="result-section ai-response">
+                        <div class="result-title">
+                            <span class="result-icon">🤖</span>
+                            תשובה מעודכנת ומותאמת:
+                        </div>
+                        <div class="result-content">${escapeHtml(data.enhanced_response)}</div>
+                    </div>
+                `;
+            }
+
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

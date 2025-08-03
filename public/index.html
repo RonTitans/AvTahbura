@@ -251,6 +251,148 @@
             margin-right: 10px;
         }
 
+        .select-response-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .select-response-btn:hover {
+            background: #38a169;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(72, 187, 120, 0.3);
+        }
+
+        .select-response-btn:active {
+            transform: translateY(0);
+        }
+
+        .official-response {
+            background: #f0fdf4;
+            border: 2px solid #48bb78;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        .official-response-title {
+            color: #22543d;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .official-response-content {
+            color: #2d3748;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .metadata {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .edit-btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .edit-btn:hover {
+            background: #3182ce;
+        }
+
+        .save-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .save-btn:hover {
+            background: #38a169;
+        }
+
+        .send-sheet-btn {
+            background: #9f7aea;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+
+        .send-sheet-btn:hover {
+            background: #805ad5;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(159, 122, 234, 0.3);
+        }
+
+        .send-sheet-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            direction: rtl;
+            line-height: 1.8;
+        }
+
+        .response-textarea:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -272,6 +414,22 @@
             <div class="logo">🚌</div>
             <h1>מערכת פניות תחבורה</h1>
             <p class="subtitle">עיריית ירושלים - מחלקת תחבורה ציבורית</p>
+            <div style="margin-top: 20px;">
+                <a href="/integrations.html" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.3)';">
+                    ⚙️ הגדרות אינטגרציות
+                </a>
+            </div>
         </div>
 
         <form id="inquiryForm">
@@ -329,6 +487,8 @@
                 }
 
                 const data = await response.json();
+                currentData = data;
+                currentInquiry = inquiry;
                 displayResults(data);
             } catch (error) {
                 console.error('Error:', error);
@@ -379,12 +539,27 @@
                         <div class="related-matches">
                 `;
                 
-                data.related_matches.forEach(match => {
+                data.related_matches.forEach((match, index) => {
+                    const formattedDate = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : 'לא זמין';
                     html += `
-                        <div class="related-match">
-                            <span class="match-score">רלוונטיות: ${match.relevance_score}</span>
+                        <div class="related-match" data-match-index="${index}">
+                            <div class="metadata">
+                                <div class="metadata-item">
+                                    <span>📅</span>
+                                    <span>תאריך: ${formattedDate}</span>
+                                </div>
+                                <div class="metadata-item">
+                                    <span>📍</span>
+                                    <span>שורה: ${match.row_number || 'לא זמין'}</span>
+                                </div>
+                                <div class="metadata-item">
+                                    <span>🎯</span>
+                                    <span>רלוונטיות: ${match.relevance_score}</span>
+                                </div>
+                            </div>
                             <strong>${escapeHtml(match.description)}</strong>
                             <div class="result-content" style="margin-top: 10px;">${escapeHtml(match.original_response)}</div>
+                            <button class="select-response-btn" onclick="selectResponse(${index})">בחר תשובה זו</button>
                         </div>
                     `;
                 });
@@ -398,21 +573,14 @@
                 `;
             }
 
-            // Display AI-enhanced response
-            if (data.enhanced_response) {
-                html += `
-                    <div class="result-section ai-response">
-                        <div class="result-title">
-                            <span class="result-icon">🤖</span>
-                            תשובה מעודכנת ומותאמת:
-                        </div>
-                        <div class="result-content">${escapeHtml(data.enhanced_response)}</div>
-                    </div>
-                `;
-            }
-
             results.innerHTML = html;
             results.style.display = 'block';
+            
+            // Display AI-enhanced response with full functionality
+            if (data.enhanced_response) {
+                currentOfficialResponse = data.enhanced_response;
+                displayOfficialResponse(data.enhanced_response);
+            }
         }
 
         function escapeHtml(text) {
@@ -420,6 +588,268 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        let currentData = null;
+        let currentInquiry = '';
+
+        async function selectResponse(matchIndex) {
+            if (!currentData || !currentData.related_matches || !currentData.related_matches[matchIndex]) {
+                alert('אירעה שגיאה בבחירת התשובה');
+                return;
+            }
+
+            const selectedMatch = currentData.related_matches[matchIndex];
+            const buttons = document.querySelectorAll('.select-response-btn');
+            buttons.forEach(btn => btn.disabled = true);
+
+            // Show loading state
+            const loadingHtml = `
+                <div class="official-response" style="text-align: center;">
+                    <div class="spinner" style="margin: 20px auto;"></div>
+                    <p>מייצר תשובה רשמית מותאמת...</p>
+                </div>
+            `;
+            
+            // Remove existing official response if any
+            const existingOfficialResponse = document.querySelector('.official-response');
+            if (existingOfficialResponse) {
+                existingOfficialResponse.remove();
+            }
+            
+            results.insertAdjacentHTML('beforeend', loadingHtml);
+
+            try {
+                // First try the new endpoint
+                let response = await fetch('http://localhost:8009/generate-official-response', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        original_inquiry: currentInquiry,
+                        selected_response: selectedMatch.original_response,
+                        case_id: selectedMatch.case_id
+                    })
+                });
+
+                let officialResponse;
+                
+                if (response.ok) {
+                    // New endpoint works
+                    const data = await response.json();
+                    officialResponse = data.official_response;
+                } else {
+                    // Fallback: Use the enhanced_response from the original data if available
+                    if (currentData.enhanced_response) {
+                        // Create a custom response based on the selected match
+                        const baseResponse = selectedMatch.original_response;
+                        
+                        // Simple formatting as official response
+                        officialResponse = `שלום,\n\n${baseResponse}\n\nבברכה,\nתוכנית אב לתחבורה`;
+                        
+                        // If we have the original enhanced response and it's good, we could use it
+                        // but it might not match the selected response, so we'll use the simple format
+                    } else {
+                        throw new Error('No enhanced response available');
+                    }
+                }
+
+                // Remove loading state
+                const loadingElement = document.querySelector('.official-response');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                displayOfficialResponse(officialResponse);
+            } catch (error) {
+                console.error('Error:', error);
+                
+                // Remove loading state
+                const loadingElement = document.querySelector('.official-response');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                // As a last resort, format the selected response nicely
+                const formattedResponse = `שלום,\n\n${selectedMatch.original_response}\n\nבברכה,\nתוכנית אב לתחבורה`;
+                displayOfficialResponse(formattedResponse);
+            } finally {
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        let currentOfficialResponse = '';
+        let isEditing = false;
+
+        function displayOfficialResponse(response) {
+            const existingOfficialResponse = document.querySelector('.official-response');
+            if (existingOfficialResponse) {
+                existingOfficialResponse.remove();
+            }
+
+            currentOfficialResponse = response;
+            isEditing = false;
+
+            const officialResponseHtml = `
+                <div class="official-response" id="officialResponseContainer">
+                    <div class="official-response-title">
+                        <span class="result-icon" style="background: #48bb78; color: white;">✓</span>
+                        תשובה רשמית מוכנה לשליחה:
+                    </div>
+                    <div id="responseContentArea">
+                        <div class="official-response-content" id="responseText">${escapeHtml(response)}</div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="edit-btn" onclick="toggleEditMode()">ערוך</button>
+                        <button class="select-response-btn" onclick="copyToClipboard()">העתק לחלונית</button>
+                        <button class="send-sheet-btn" onclick="sendToGoogleSheet()" id="sendSheetBtn">שלח ל-Google Sheet</button>
+                    </div>
+                </div>
+            `;
+
+            results.insertAdjacentHTML('beforeend', officialResponseHtml);
+            
+            // Scroll to the official response
+            const officialResponseElement = document.querySelector('.official-response');
+            if (officialResponseElement) {
+                officialResponseElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function toggleEditMode() {
+            const contentArea = document.getElementById('responseContentArea');
+            
+            if (!isEditing) {
+                // Switch to edit mode
+                contentArea.innerHTML = `
+                    <textarea class="response-textarea" id="responseTextarea">${currentOfficialResponse}</textarea>
+                `;
+                document.querySelector('.edit-btn').textContent = 'שמור';
+                document.querySelector('.edit-btn').classList.add('save-btn');
+                isEditing = true;
+            } else {
+                // Save and switch back to view mode
+                const textarea = document.getElementById('responseTextarea');
+                currentOfficialResponse = textarea.value;
+                
+                contentArea.innerHTML = `
+                    <div class="official-response-content" id="responseText">${escapeHtml(currentOfficialResponse)}</div>
+                `;
+                document.querySelector('.edit-btn').textContent = 'ערוך';
+                document.querySelector('.edit-btn').classList.remove('save-btn');
+                isEditing = false;
+            }
+        }
+
+        function copyToClipboard() {
+            const textarea = document.createElement('textarea');
+            textarea.value = currentOfficialResponse;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('התשובה הועתקה ללוח!');
+        }
+
+        async function sendToGoogleSheet() {
+            const sendBtn = document.getElementById('sendSheetBtn');
+            const originalText = sendBtn.textContent;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'שולח... ⏳';
+
+            try {
+                const response = await fetch('http://localhost:8009/append-to-sheet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        inquiry: currentInquiry,
+                        response: currentOfficialResponse,
+                        timestamp: new Date().toISOString(),
+                        source: 'municipal_inquiry_system'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.details || result.error || 'Failed to send to Google Sheet');
+                }
+
+                // Success feedback
+                sendBtn.style.background = '#48bb78';
+                sendBtn.textContent = 'נשלח בהצלחה ✓';
+                
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.style.cssText = `
+                    background: #f0fdf4;
+                    border: 1px solid #48bb78;
+                    color: #22543d;
+                    padding: 10px;
+                    border-radius: 8px;
+                    margin-top: 10px;
+                    text-align: center;
+                    animation: fadeIn 0.3s ease-out;
+                `;
+                successMsg.textContent = 'התשובה נשלחה בהצלחה ל-Google Sheet!';
+                
+                const container = document.getElementById('officialResponseContainer');
+                container.appendChild(successMsg);
+                
+                // Remove success message after 3 seconds
+                setTimeout(() => {
+                    if (successMsg.parentNode) {
+                        successMsg.remove();
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Error sending to Google Sheet:', error);
+                
+                // Error feedback
+                sendBtn.style.background = '#e53e3e';
+                sendBtn.textContent = 'שגיאה ❌';
+                sendBtn.disabled = false;
+                
+                // Show error message
+                const errorMsg = document.createElement('div');
+                errorMsg.style.cssText = `
+                    background: #fff5f5;
+                    border: 1px solid #e53e3e;
+                    color: #c53030;
+                    padding: 10px;
+                    border-radius: 8px;
+                    margin-top: 10px;
+                    text-align: center;
+                    animation: fadeIn 0.3s ease-out;
+                `;
+                errorMsg.innerHTML = `
+                    <strong>שגיאה בשליחה ל-Google Sheet</strong><br>
+                    <small>${error.message}</small><br>
+                    <small>אנא נסה שוב או פנה למנהל המערכת</small>
+                `;
+                
+                const container = document.getElementById('officialResponseContainer');
+                container.appendChild(errorMsg);
+                
+                // Scroll to show the error message
+                setTimeout(() => {
+                    errorMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+                
+                // Reset button after 5 seconds
+                setTimeout(() => {
+                    sendBtn.style.background = '#9f7aea';
+                    sendBtn.textContent = originalText;
+                    if (errorMsg.parentNode) {
+                        errorMsg.remove();
+                    }
+                }, 5000);
+            }
+        }
+
     </script>
 </body>
 </html>

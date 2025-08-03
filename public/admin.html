@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>לוח בקרה - מערכת פניות תחבורה</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Sticky Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e2e8f0;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+
+        .header-title h1 {
+            color: #2d3748;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        /* Main Layout */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            border: 1px solid #f1f5f9;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .card-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+        }
+
+        .card-title {
+            color: #2d3748;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* Status Indicators */
+        .status-success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+        .status-warning { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }
+        .status-error { background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); }
+        .status-info { background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); }
+        .status-purple { background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%); }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+            border: 1px solid #f1f5f9;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2d3748;
+            margin: 10px 0;
+            line-height: 1;
+        }
+
+        .metric-label {
+            color: #718096;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .metric-trend {
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .trend-up { color: #48bb78; }
+        .trend-down { color: #e53e3e; }
+        .trend-stable { color: #4299e1; }
+
+        /* Health Status */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .health-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 10px;
+            border-left: 4px solid #e2e8f0;
+        }
+
+        .health-item.healthy {
+            border-left-color: #48bb78;
+            background: #f0fdf4;
+        }
+
+        .health-item.warning {
+            border-left-color: #ed8936;
+            background: #fffbeb;
+        }
+
+        .health-item.error {
+            border-left-color: #e53e3e;
+            background: #fff5f5;
+        }
+
+        .health-icon {
+            font-size: 20px;
+        }
+
+        .health-info h4 {
+            color: #2d3748;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .health-info p {
+            color: #718096;
+            font-size: 12px;
+        }
+
+        /* Recent Activity */
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s ease;
+        }
+
+        .activity-item:hover {
+            background: #f8fafc;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-time {
+            color: #718096;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .activity-description {
+            color: #2d3748;
+            font-size: 14px;
+            margin: 2px 0;
+        }
+
+        .activity-duration {
+            color: #4a5568;
+            font-size: 12px;
+        }
+
+        /* Logs Viewer */
+        .logs-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .log-entry {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e2e8f0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: #718096;
+            font-weight: 600;
+        }
+
+        .log-level-info { color: #3182ce; }
+        .log-level-success { color: #38a169; }
+        .log-level-warning { color: #d69e2e; }
+        .log-level-error { color: #e53e3e; }
+
+        /* Integration Status */
+        .integration-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .integration-item:hover {
+            border-color: #cbd5e0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .integration-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .integration-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .integration-details h4 {
+            color: #2d3748;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .integration-details p {
+            color: #718096;
+            font-size: 12px;
+        }
+
+        .integration-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 4px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .btn-link {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-link:hover {
+            background: #cbd5e0;
+        }
+
+        /* Collapsible Panels */
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 15px;
+        }
+
+        .collapsible-header:hover {
+            color: #667eea;
+        }
+
+        .collapsible-content {
+            display: none;
+        }
+
+        .collapsible-content.active {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 1000px;
+            }
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        select, input[type="date"] {
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            background: white;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            text-align: right;
+            padding: 12px 15px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .main-container {
+                padding: 15px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        /* Tooltips */
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d3748;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .tooltip:hover::before {
+            content: '';
+            position: absolute;
+            bottom: 92%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #2d3748;
+            z-index: 1000;
+        }
+
+        /* Loading States */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Auto-refresh indicator */
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .refresh-indicator.active {
+            color: #48bb78;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sticky Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="header-title">
+                <div class="header-icon">📊</div>
+                <h1>לוח בקרה מתקדם</h1>
+            </div>
+            <div class="header-controls">
+                <div class="refresh-indicator" id="refreshIndicator">
+                    <span id="refreshIcon">🔄</span>
+                    <span id="refreshText">עדכון אוטומטי</span>
+                </div>
+                <button class="btn-secondary" onclick="loadAllData()" id="refreshBtn">
+                    רענן נתונים
+                </button>
+                <a href="/integrations.html" class="btn-secondary">⚙️ הגדרות</a>
+                <a href="/" class="btn-primary">← חזרה לדף הראשי</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Key Metrics Overview -->
+        <div class="metrics-grid" id="metricsGrid">
+            <div class="metric-card tooltip" data-tooltip="סך הבקשות שהתקבלו במערכת">
+                <div class="metric-label">סה"כ בקשות</div>
+                <div class="metric-value" id="totalRequests">-</div>
+                <div class="metric-trend trend-up" id="requestsTrend">📈 +12% השבוע</div>
+            </div>
+            <div class="metric-card tooltip" data-tooltip="אחוז הבקשות שהצליחו לקבל תשובה">
+                <div class="metric-label">אחוז הצלחה</div>
+                <div class="metric-value" id="successRate">-</div>
+                <div class="metric-trend trend-stable" id="successTrend">📊 יציב</div>
+            </div>
+            <div class="metric-card tooltip" data-tooltip="זמן תגובה ממוצע למענה על בקשות">
+                <div class="metric-label">זמן תגובה ממוצע</div>
+                <div class="metric-value" id="avgResponseTime">-</div>
+                <div class="metric-trend trend-down" id="responseTrend">📉 -5ms</div>
+            </div>
+            <div class="metric-card tooltip" data-tooltip="אחוז הבקשות שנענו ממטמון">
+                <div class="metric-label">שיעור מטמון</div>
+                <div class="metric-value" id="cacheHitRate">-</div>
+                <div class="metric-trend trend-up" id="cacheTrend">📈 +8%</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- System Health -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon status-success">💚</div>
+                    <div class="card-title">תקינות המערכת</div>
+                </div>
+                <div class="health-grid" id="systemHealth">
+                    <div class="health-item healthy">
+                        <div class="health-icon">⏱️</div>
+                        <div class="health-info">
+                            <h4>זמן פעילות</h4>
+                            <p id="systemUptime">מחשב...</p>
+                        </div>
+                    </div>
+                    <div class="health-item" id="dataLoadHealth">
+                        <div class="health-icon">📊</div>
+                        <div class="health-info">
+                            <h4>טעינת נתונים</h4>
+                            <p id="dataLoadStatus">בודק...</p>
+                        </div>
+                    </div>
+                    <div class="health-item" id="lastFailureHealth">
+                        <div class="health-icon">⚠️</div>
+                        <div class="health-info">
+                            <h4>כשל אחרון</h4>
+                            <p id="lastFailureReason">בודק...</p>
+                        </div>
+                    </div>
+                    <div class="health-item healthy">
+                        <div class="health-icon">🔄</div>
+                        <div class="health-info">
+                            <h4>תהליכים פעילים</h4>
+                            <p id="activeProcesses">מחשב...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon status-info">📝</div>
+                    <div class="card-title">פעילות אחרונה</div>
+                </div>
+                <div id="recentActivity">
+                    <!-- Activity items will be populated here -->
+                </div>
+            </div>
+
+            <!-- Integration Status -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon status-purple">🔗</div>
+                    <div class="card-title">סטטוס אינטגרציות</div>
+                </div>
+                <div id="integrationStatus">
+                    <!-- Integration items will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Sections -->
+        <div class="dashboard-grid">
+            <!-- Cache Management -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon status-info">💾</div>
+                    <div class="card-title">ניהול מטמון</div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <button class="btn-secondary" onclick="loadCacheStats()">רענן נתונים</button>
+                    <button class="btn-danger" onclick="clearCache()">נקה מטמון</button>
+                </div>
+                <div id="cacheStats"></div>
+            </div>
+
+            <!-- Session Management -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon status-success">👥</div>
+                    <div class="card-title">ניהול הפעלות</div>
+                </div>
+                <button class="btn-secondary" onclick="loadSessions()" style="margin-bottom: 15px;">רענן נתונים</button>
+                <div id="sessionStats"></div>
+            </div>
+        </div>
+
+        <!-- Logs Viewer -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon status-warning">📋</div>
+                <div class="card-title">מציג יומנים</div>
+            </div>
+            
+            <!-- Log Filters -->
+            <div class="filters">
+                <div class="filter-group">
+                    <span class="filter-label">סינון לפי:</span>
+                    <select id="logTypeFilter" onchange="filterLogs()">
+                        <option value="all">כל הסוגים</option>
+                        <option value="success">הצלחה</option>
+                        <option value="error">שגיאות</option>
+                        <option value="warning">אזהרות</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">מתאריך:</span>
+                    <input type="date" id="logDateFilter" onchange="filterLogs()">
+                </div>
+                <button class="btn-secondary" onclick="loadAnalytics()">רענן יומנים</button>
+            </div>
+
+            <div class="collapsible-header" onclick="toggleCollapsible('logsViewer')">
+                <span>צפייה ביומנים מפורטים</span>
+                <span id="logsToggle">▼</span>
+            </div>
+            <div class="collapsible-content" id="logsViewer">
+                <div class="logs-container" id="logsContainer">
+                    <!-- Logs will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Analytics -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon status-info">📈</div>
+                <div class="card-title">ביצועי גרסאות פרומפט</div>
+            </div>
+            <div id="promptVariantStats"></div>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+        let systemStartTime = Date.now();
+
+        // Auto-refresh every 30 seconds
+        function startAutoRefresh() {
+            refreshInterval = setInterval(() => {
+                loadAllData();
+                updateRefreshIndicator(true);
+                setTimeout(() => updateRefreshIndicator(false), 1000);
+            }, 30000);
+        }
+
+        function updateRefreshIndicator(active) {
+            const indicator = document.getElementById('refreshIndicator');
+            const icon = document.getElementById('refreshIcon');
+            const text = document.getElementById('refreshText');
+            
+            if (active) {
+                indicator.classList.add('active');
+                icon.textContent = '🔄';
+                text.textContent = 'מעדכן...';
+            } else {
+                indicator.classList.remove('active');
+                icon.textContent = '✅';
+                text.textContent = `עדכון אחרון: ${new Date().toLocaleTimeString('he-IL')}`;
+            }
+        }
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllData();
+            startAutoRefresh();
+            updateSystemUptime();
+            setInterval(updateSystemUptime, 60000); // Update uptime every minute
+        });
+
+        function updateSystemUptime() {
+            const uptime = Date.now() - systemStartTime;
+            const hours = Math.floor(uptime / (1000 * 60 * 60));
+            const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('systemUptime').textContent = `${hours}:${minutes.toString().padStart(2, '0')} שעות`;
+        }
+
+        async function loadAllData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.innerHTML = '<div class="loading"></div> מעדכן...';
+            refreshBtn.disabled = true;
+
+            try {
+                await Promise.all([
+                    loadAnalytics(),
+                    loadCacheStats(),
+                    loadSessions(),
+                    loadSystemHealth(),
+                    loadIntegrationStatus()
+                ]);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            } finally {
+                refreshBtn.innerHTML = 'רענן נתונים';
+                refreshBtn.disabled = false;
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/analytics');
+                const data = await response.json();
+                
+                // Update metrics
+                document.getElementById('totalRequests').textContent = 
+                    data.summary.totalRequests.toLocaleString('he-IL');
+                document.getElementById('successRate').textContent = 
+                    data.performance.validationSuccessRate;
+                document.getElementById('avgResponseTime').textContent = 
+                    data.performance.averageResponseTime;
+                document.getElementById('cacheHitRate').textContent = 
+                    data.performance.cacheHitRate;
+                
+                // Update sections
+                updatePromptVariantStats(data.summary.promptVariantPerformance);
+                updateRecentActivity(data.recentLogs);
+                updateDetailedLogs(data.recentLogs);
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                showError('שגיאה בטעינת נתוני אנליטיקה');
+            }
+        }
+
+        async function loadSystemHealth() {
+            try {
+                const healthResponse = await fetch('/health');
+                const healthData = await healthResponse.json();
+                
+                // Update data load status
+                const dataLoadHealth = document.getElementById('dataLoadHealth');
+                const dataLoadStatus = document.getElementById('dataLoadStatus');
+                
+                if (healthData.data_loaded_successfully) {
+                    dataLoadHealth.className = 'health-item healthy';
+                    dataLoadStatus.textContent = `✅ ${healthData.records_loaded.toLocaleString('he-IL')} רשומות טעונות`;
+                } else {
+                    dataLoadHealth.className = 'health-item error';
+                    dataLoadStatus.textContent = '❌ שגיאה בטעינת נתונים';
+                }
+
+                // Update active processes
+                document.getElementById('activeProcesses').textContent = 
+                    `${healthData.active_sessions} הפעלות פעילות`;
+
+                // Check for failures
+                const lastFailureHealth = document.getElementById('lastFailureHealth');
+                const lastFailureReason = document.getElementById('lastFailureReason');
+                
+                if (healthData.data_loaded_successfully && healthData.records_loaded > 0) {
+                    lastFailureHealth.className = 'health-item healthy';
+                    lastFailureReason.textContent = '✅ אין כשלים אחרונים';
+                } else {
+                    lastFailureHealth.className = 'health-item warning';
+                    lastFailureReason.textContent = '⚠️ בדוק חיבור למקורות נתונים';
+                }
+
+            } catch (error) {
+                console.error('Error loading system health:', error);
+            }
+        }
+
+        async function loadIntegrationStatus() {
+            const integrationContainer = document.getElementById('integrationStatus');
+            let html = '';
+
+            try {
+                // Check Google Sheets integration
+                const sheetsResponse = await fetch('/api/integrations/google-sheets');
+                const sheetsData = await sheetsResponse.json();
+                
+                const sheetsStatus = sheetsData.connection_status === 'connected' ? 'healthy' : 'error';
+                const sheetsIcon = sheetsData.connection_status === 'connected' ? '✅' : '❌';
+                
+                html += `
+                    <div class="integration-item">
+                        <div class="integration-info">
+                            <div class="integration-status ${sheetsStatus === 'healthy' ? 'status-success' : 'status-error'}"></div>
+                            <div class="integration-details">
+                                <h4>Google Sheets</h4>
+                                <p>${sheetsIcon} ${sheetsData.connection_status === 'connected' ? 'מחובר ופעיל' : 'לא מחובר'}</p>
+                            </div>
+                        </div>
+                        <div class="integration-actions">
+                            <a href="/integrations.html" class="btn-small btn-link">הגדרות</a>
+                        </div>
+                    </div>
+                `;
+
+                // Check OpenAI integration
+                const openaiResponse = await fetch('/api/integrations/openai');
+                const openaiData = await openaiResponse.json();
+                
+                const openaiStatus = openaiData.connection_status === 'connected' ? 'healthy' : 'error';
+                const openaiIcon = openaiData.connection_status === 'connected' ? '✅' : '❌';
+                
+                html += `
+                    <div class="integration-item">
+                        <div class="integration-info">
+                            <div class="integration-status ${openaiStatus === 'healthy' ? 'status-success' : 'status-error'}"></div>
+                            <div class="integration-details">
+                                <h4>OpenAI</h4>
+                                <p>${openaiIcon} ${openaiData.connection_status === 'connected' ? 'מחובר ופעיל' : 'לא מחובר'}</p>
+                            </div>
+                        </div>
+                        <div class="integration-actions">
+                            <a href="/integrations.html" class="btn-small btn-link">הגדרות</a>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                html = '<p style="color: #e53e3e;">שגיאה בטעינת סטטוס אינטגרציות</p>';
+            }
+
+            integrationContainer.innerHTML = html;
+        }
+
+        async function loadCacheStats() {
+            try {
+                const response = await fetch('/cache/stats');
+                const data = await response.json();
+                
+                let html = `<p><strong>גודל מטמון:</strong> ${data.size} פריטים</p>`;
+                if (data.entries.length > 0) {
+                    html += '<table><thead><tr><th>מפתח</th><th>גיל</th><th>שימושים</th></tr></thead><tbody>';
+                    data.entries.forEach(entry => {
+                        html += `<tr>
+                            <td>${entry.key}</td>
+                            <td>${entry.age}</td>
+                            <td>${entry.hits}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p style="color: #718096; font-style: italic;">המטמון ריק</p>';
+                }
+                
+                document.getElementById('cacheStats').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading cache stats:', error);
+                document.getElementById('cacheStats').innerHTML = '<p style="color: #e53e3e;">שגיאה בטעינת נתוני מטמון</p>';
+            }
+        }
+
+        async function loadSessions() {
+            try {
+                const response = await fetch('/sessions');
+                const data = await response.json();
+                
+                let html = `<p><strong>סה"כ הפעלות פעילות:</strong> ${data.totalSessions}</p>`;
+                if (data.sessions.length > 0) {
+                    html += '<table><thead><tr><th>מזהה הפעלה</th><th>אינטראקציות</th><th>נושאים תכופים</th></tr></thead><tbody>';
+                    data.sessions.forEach(session => {
+                        html += `<tr>
+                            <td>${session.sessionId.substring(0, 20)}...</td>
+                            <td>${session.interactionCount}</td>
+                            <td>${session.frequentTopics.join(', ') || 'אין נתונים'}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p style="color: #718096; font-style: italic;">אין הפעלות פעילות</p>';
+                }
+                
+                document.getElementById('sessionStats').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessionStats').innerHTML = '<p style="color: #e53e3e;">שגיאה בטעינת נתוני הפעלות</p>';
+            }
+        }
+
+        async function clearCache() {
+            if (confirm('האם אתה בטוח שברצונך לנקות את המטמון?')) {
+                try {
+                    const response = await fetch('/cache/clear', { method: 'POST' });
+                    const data = await response.json();
+                    alert(data.message);
+                    loadCacheStats();
+                } catch (error) {
+                    console.error('Error clearing cache:', error);
+                    alert('שגיאה בניקוי המטמון');
+                }
+            }
+        }
+
+        function updatePromptVariantStats(variants) {
+            let html = '';
+            
+            if (Object.keys(variants).length === 0) {
+                html = '<p style="color: #718096; font-style: italic;">אין נתוני ביצועים זמינים</p>';
+            } else {
+                html = '<table><thead><tr><th>גרסה</th><th>שימושים</th><th>שיעור הצלחה</th></tr></thead><tbody>';
+                
+                Object.entries(variants).forEach(([name, stats]) => {
+                    const successRate = (stats.successRate * 100).toFixed(1);
+                    const statusClass = successRate > 80 ? 'log-level-success' : 'log-level-error';
+                    html += `<tr>
+                        <td>${name}</td>
+                        <td>${stats.count}</td>
+                        <td class="${statusClass}">${successRate}%</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+            }
+            
+            document.getElementById('promptVariantStats').innerHTML = html;
+        }
+
+        function updateRecentActivity(logs) {
+            const container = document.getElementById('recentActivity');
+            
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<p style="color: #718096; font-style: italic;">אין פעילות אחרונה</p>';
+                return;
+            }
+            
+            let html = '';
+            logs.slice(0, 5).forEach(log => {
+                const status = log.validationResult?.isValid ? 'status-success' : 'status-error';
+                const time = new Date(log.timestamp).toLocaleTimeString('he-IL');
+                const date = new Date(log.timestamp).toLocaleDateString('he-IL');
+                const cached = log.wasCached ? ' (ממטמון)' : '';
+                
+                html += `
+                    <div class="activity-item">
+                        <div class="activity-status ${status}"></div>
+                        <div class="activity-content">
+                            <div class="activity-time">${date} ${time}</div>
+                            <div class="activity-description">בקשה: ${log.inquiry.substring(0, 80)}...</div>
+                            <div class="activity-duration">זמן תגובה: ${log.responseTime}ms${cached}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function updateDetailedLogs(logs) {
+            const container = document.getElementById('logsContainer');
+            
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<div class="log-entry">אין יומנים זמינים</div>';
+                return;
+            }
+            
+            let html = '';
+            logs.forEach(log => {
+                const level = log.validationResult?.isValid ? 'success' : 'error';
+                const time = new Date(log.timestamp).toLocaleString('he-IL');
+                const cached = log.wasCached ? ' [CACHED]' : '';
+                
+                html += `
+                    <div class="log-entry" data-level="${level}" data-date="${log.timestamp}">
+                        <span class="log-timestamp">[${time}]</span>
+                        <span class="log-level-${level}"> ${level.toUpperCase()}</span>
+                        ${cached}
+                        <br>שאילתה: ${log.inquiry}
+                        <br>זמן תגובה: ${log.responseTime}ms
+                        <br>תוצאה: ${log.validationResult?.isValid ? 'הצלחה' : 'כשלון'}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function filterLogs() {
+            const typeFilter = document.getElementById('logTypeFilter').value;
+            const dateFilter = document.getElementById('logDateFilter').value;
+            const logEntries = document.querySelectorAll('.log-entry');
+            
+            logEntries.forEach(entry => {
+                let show = true;
+                
+                // Filter by type
+                if (typeFilter !== 'all') {
+                    const level = entry.getAttribute('data-level');
+                    if (level !== typeFilter) {
+                        show = false;
+                    }
+                }
+                
+                // Filter by date
+                if (dateFilter) {
+                    const entryDate = new Date(entry.getAttribute('data-date')).toDateString();
+                    const filterDate = new Date(dateFilter).toDateString();
+                    if (entryDate !== filterDate) {
+                        show = false;
+                    }
+                }
+                
+                entry.style.display = show ? 'block' : 'none';
+            });
+        }
+
+        function toggleCollapsible(id) {
+            const content = document.getElementById(id);
+            const toggle = document.getElementById(id.replace('Viewer', 'Toggle'));
+            
+            if (content.classList.contains('active')) {
+                content.classList.remove('active');
+                content.style.display = 'none';
+                toggle.textContent = '▼';
+            } else {
+                content.classList.add('active');
+                content.style.display = 'block';
+                toggle.textContent = '▲';
+            }
+        }
+
+        function showError(message) {
+            // Simple error notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #e53e3e;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                z-index: 9999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

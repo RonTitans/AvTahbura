@@ -5,7 +5,16 @@ import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import OpenAI from 'openai';
+import { 
+  generateEnhancedFinalResponse, 
+  responseCache, 
+  analytics, 
+  sessions,
+  ConversationContext,
+  initializeGPTImprovements
+} from './gpt-improvements.js';
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +55,8 @@ try {
   openaiAvailable = false;
 }
 
+// GPT improvements will be initialized after function definitions
+
 // Hebrew keywords for filtering official responses
 const OFFICIAL_KEYWORDS = [
   'שלום רב', 'בברכה', 'פנייתך', 'בקשתך', 'אנו', 'אנא', 'נא',
@@ -53,11 +64,15 @@ const OFFICIAL_KEYWORDS = [
 ];
 
 // Initialize Google Sheets authentication
-async function authenticateGoogleSheets() {
+async function authenticateGoogleSheets(readOnly = true) {
   try {
+    const scopes = readOnly 
+      ? ['https://www.googleapis.com/auth/spreadsheets.readonly']
+      : ['https://www.googleapis.com/auth/spreadsheets'];
+      
     const auth = new GoogleAuth({
       keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+      scopes: scopes
     });
     
     const authClient = await auth.getClient();
@@ -126,6 +141,8 @@ async function loadDataFromSheets() {
         const cleanedResponse = cleanHistoricalResponse(responseText.trim());
         entry.inquiry_text = inquiryText.trim();
         entry.response_text = cleanedResponse;
+        entry.row_number = i; // Add row number from spreadsheet
+        entry.created_date = entry['נוצר ב:'] || ''; // Add creation date
         municipalData.push(entry);
         responsesFound++;
       }
@@ -151,7 +168,10 @@ async function loadDataFromSheets() {
     
     // Generate embeddings for all loaded data if OpenAI is available
     if (municipalData.length > 0 && openaiAvailable) {
-      await generateAllEmbeddings();
+      // Temporarily skip embeddings generation to allow server to start
+      console.log('⚠️ Skipping embeddings generation for faster startup - will use text-based search');
+      embeddingsReady = false;
+      // await generateAllEmbeddings();
     } else if (!openaiAvailable) {
       console.log('⚠️ Running without embeddings - will use fallback search if needed');
     }
@@ -296,20 +316,13 @@ function cleanHistoricalResponse(response) {
     .replace(/בעיה זו\s+/gi, '') // Remove "this issue"
     .trim();
   
-  // If response is too short or contains only system artifacts, return a generic response
+  // If response is too short or contains only system artifacts, return empty
   if (cleaned.length < 20 || !/[א-ת]/.test(cleaned)) {
-    return 'שלום רב, פנייתך התקבלה ותיבחן על ידי הצוות המקצועי. בברכה, מחלקת תחבורה ציבורית עיריית ירושלים';
+    return '';
   }
   
-  // Ensure proper greeting if missing
-  if (!cleaned.startsWith('שלום רב')) {
-    cleaned = 'שלום רב, ' + cleaned;
-  }
-  
-  // Ensure proper closing if missing
-  if (!cleaned.includes('בברכה')) {
-    cleaned = cleaned + '\n\nבברכה,\nמחלקת תחבורה ציבורית\nעיריית ירושלים';
-  }
+  // Don't add greeting or closing - return the cleaned response as-is
+  // This preserves the original format from the database
   
   return cleaned;
 }
@@ -458,8 +471,9 @@ async function findSemanticMatches(inquiryText, threshold = 0.78, maxResults = 5
   }
   
   if (!embeddingsReady && openaiAvailable) {
-    console.log('⚠️ Embeddings not ready, generating now...');
-    await generateAllEmbeddings();
+    console.log('⚠️ Embeddings not ready, skipping generation for faster response');
+    // Skip embedding generation to avoid timeout
+    // await generateAllEmbeddings();
   }
   
   if (!embeddingsReady || !openaiAvailable) {
@@ -537,17 +551,60 @@ async function findSemanticMatches(inquiryText, threshold = 0.78, maxResults = 5
 
 // Generate final response combining historical and AI enhancement
 async function generateFinalResponse(inquiryText, historicalResponse = null) {
+  // If OpenAI is available, use it to generate a fresh response
+  if (openaiAvailable && openai) {
+    try {
+      let systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בעיריית ירושלים. 
+תפקידך לכתוב תשובה סופית ומלאה לאזרח - לא הסבר פנימי או סיכום.
+
+מבנה התשובה הנדרש (חובה לכל תשובה):
+1. פתיחה מנומסת: "שלום,"
+2. תשובה מקצועית ומנוסחת היטב, מחולקת לפסקאות קצרות וקריאות
+3. משפט סיום חם וידידותי
+4. חתימה: "בברכה, תוכנית אב לתחבורה"
+
+עקרונות כתיבה:
+• כתוב בעברית תקינה וברורה
+• התייחס ישירות לבעיה של האזרח
+• ספק מידע מדויק ומעשי
+• שמור על טון מקצועי ואמפתי
+• וודא שהתשובה מלאה ולא נקטעת באמצע
+
+התשובה שלך היא הטקסט הסופי שיישלח לאזרח - אין צורך בהסברים נוספים.`;
+
+      let userPrompt = `פנייה מאזרח: ${inquiryText}`;
+      
+      if (historicalResponse) {
+        const cleanedResponse = cleanHistoricalResponse(historicalResponse);
+        userPrompt += `\n\nתשובה דומה מהמערכת (לא לשימוש ישיר - רק להתייחסות):\n${cleanedResponse}`;
+      }
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      return completion.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error generating GPT response:', error);
+      // Fall back to cleaned historical response or generic response
+    }
+  }
+  
+  // Fallback when OpenAI is not available
   if (historicalResponse) {
-    // Clean the historical response
     const cleanedResponse = cleanHistoricalResponse(historicalResponse);
-    
-    // If the cleaned response is substantial, use it directly
     if (cleanedResponse.length > 50) {
       return cleanedResponse;
     }
   }
   
-  // Generate new municipal-style response
+  // Generic fallback response
   return `שלום רב,
 
 קיבלנו את פנייתך בנושא: ${inquiryText}
@@ -624,12 +681,28 @@ app.post('/recommend', async (req, res) => {
         case_id: match.case_id,
         description: match.inquiry_text,
         original_response: match.response_text,
-        relevance_score: match.similarity
+        relevance_score: match.similarity,
+        row_number: match.row_number,
+        created_date: match.created_date
       }));
       
-      response.enhanced_response = await generateFinalResponse(
+      // Get or create session context
+      const sessionId = req.headers['x-session-id'] || req.ip;
+      if (!sessions.has(sessionId)) {
+        sessions.set(sessionId, new ConversationContext(sessionId));
+      }
+      const sessionContext = sessions.get(sessionId);
+      
+      // Use enhanced GPT response generation
+      response.enhanced_response = await generateEnhancedFinalResponse(
         inquiry_text,
-        bestMatch.response_text
+        bestMatch.response_text,
+        {
+          sessionContext,
+          promptVariant: req.body.prompt_variant || 'detailed',
+          useCache: true,
+          analytics
+        }
       );
     } else {
       console.log(`❌ No matches found above threshold 0.78`);
@@ -646,7 +719,24 @@ app.post('/recommend', async (req, res) => {
         response.debug.no_match_reason = "Embeddings not ready - used text similarity with threshold 0.2";
       }
       
-      response.enhanced_response = await generateFinalResponse(inquiry_text);
+      // Get or create session context
+      const sessionId = req.headers['x-session-id'] || req.ip;
+      if (!sessions.has(sessionId)) {
+        sessions.set(sessionId, new ConversationContext(sessionId));
+      }
+      const sessionContext = sessions.get(sessionId);
+      
+      // Use enhanced GPT response generation without historical context
+      response.enhanced_response = await generateEnhancedFinalResponse(
+        inquiry_text,
+        null,
+        {
+          sessionContext,
+          promptVariant: req.body.prompt_variant || 'detailed',
+          useCache: true,
+          analytics
+        }
+      );
     }
     
     console.log(`📊 RESPONSE SUMMARY:`);
@@ -674,7 +764,9 @@ app.get('/health', (req, res) => {
     last_refresh: lastRefreshTime,
     records_loaded: municipalData.length,
     data_loaded_successfully: dataLoadedSuccessfully,
-    search_type: embeddingsReady ? 'semantic_embeddings' : 'text_similarity'
+    search_type: embeddingsReady ? 'semantic_embeddings' : 'text_similarity',
+    gpt_cache_size: responseCache.cache.size,
+    active_sessions: sessions.size
   });
 });
 
@@ -708,6 +800,604 @@ app.post('/refresh', async (req, res) => {
     last_refresh: lastRefreshTime
   });
 });
+
+// Analytics endpoint
+app.get('/analytics', (req, res) => {
+  const report = analytics.getReport();
+  res.json(report);
+});
+
+// Cache management endpoints
+app.get('/cache/stats', (req, res) => {
+  res.json(responseCache.getStats());
+});
+
+app.post('/cache/clear', (req, res) => {
+  responseCache.clear();
+  res.json({ message: 'Cache cleared successfully' });
+});
+
+// Generate official response endpoint
+app.post('/generate-official-response', async (req, res) => {
+  try {
+    const { original_inquiry, selected_response, case_id } = req.body;
+    
+    if (!original_inquiry || !selected_response) {
+      return res.status(400).json({ 
+        error: 'original_inquiry and selected_response are required' 
+      });
+    }
+
+    // Log the request for analytics
+    console.log(`Generating official response for inquiry: ${original_inquiry.substring(0, 50)}...`);
+
+    // If OpenAI is not available, return a formatted version of the selected response
+    if (!openaiAvailable || !openai) {
+      const formattedResponse = `שלום,
+
+${selected_response}
+
+בברכה,
+תוכנית אב לתחבורה`;
+      
+      return res.json({ 
+        official_response: formattedResponse,
+        source: 'formatted_template'
+      });
+    }
+
+    // Use OpenAI to generate an official response
+    const systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בעיריית ירושלים. 
+תפקידך לכתוב תשובה רשמית לאזרח בהתבסס על תשובה דומה שנמצאה במערכת.
+
+הנחיות חשובות:
+1. התחל את התשובה ב: "שלום,"
+2. כתוב תשובה מלאה ומותאמת לפנייה הספציפית
+3. אם התשובה ארוכה, חלק אותה לפסקאות קצרות
+4. השתמש בטון רשמי אך ידידותי ומכבד
+5. היה ספציפי וענייני
+6. סיים את התשובה ב:
+"בברכה,
+תוכנית אב לתחבורה"
+
+אל תוסיף מידע שלא קיים בתשובה המקורית.`;
+
+    const userPrompt = `פניית האזרח: "${original_inquiry}"
+
+תשובה דומה מהמערכת: "${selected_response}"
+
+אנא כתוב תשובה רשמית מעודכנת ומותאמת לפנייה הספציפית, תוך שמירה על המידע המהותי מהתשובה הדומה.`;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 800
+      });
+
+      const officialResponse = completion.choices[0].message.content.trim();
+
+      // Store in cache for analytics
+      responseCache.set(`official_${case_id || Date.now()}`, {
+        original_inquiry,
+        selected_response,
+        official_response: officialResponse,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({ 
+        official_response: officialResponse,
+        source: 'openai_generated'
+      });
+
+    } catch (openaiError) {
+      console.error('OpenAI API error:', openaiError);
+      
+      // Fallback to formatted template
+      const formattedResponse = `שלום,
+
+${selected_response}
+
+בברכה,
+תוכנית אב לתחבורה`;
+      
+      res.json({ 
+        official_response: formattedResponse,
+        source: 'formatted_template_fallback'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error generating official response:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate official response',
+      details: error.message 
+    });
+  }
+});
+
+// Append to Google Sheet endpoint
+app.post('/append-to-sheet', async (req, res) => {
+  try {
+    const { inquiry, response, timestamp, source } = req.body;
+    
+    if (!inquiry || !response) {
+      return res.status(400).json({ 
+        error: 'inquiry and response are required' 
+      });
+    }
+
+    console.log(`📝 Appending new response to Google Sheet...`);
+    console.log(`🔑 Using credentials file: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    console.log(`📊 Target spreadsheet ID: ${process.env.SPREADSHEET_ID}`);
+    
+    // Read and display service account email for verification
+    try {
+      const credentialsContent = fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8');
+      const credentials = JSON.parse(credentialsContent);
+      console.log(`👤 Service account email: ${credentials.client_email}`);
+    } catch (credError) {
+      console.log(`⚠️ Could not read service account email: ${credError.message}`);
+    }
+
+    try {
+      console.log(`🔐 Attempting authentication with write permissions...`);
+      const sheets = await authenticateGoogleSheets(false); // Request write permissions
+      console.log(`✅ Authentication successful`);
+      
+      // First, get spreadsheet metadata to see available sheets
+      console.log(`🔍 Getting spreadsheet metadata to identify correct sheet...`);
+      const spreadsheetInfo = await sheets.spreadsheets.get({
+        spreadsheetId: process.env.SPREADSHEET_ID
+      });
+      
+      console.log(`📋 Available sheets:`);
+      spreadsheetInfo.data.sheets.forEach(sheet => {
+        console.log(`  - ${sheet.properties.title} (ID: ${sheet.properties.sheetId})`);
+      });
+      
+      // Find the correct sheet - try common names
+      const possibleSheetNames = ['Cleaned_Answers_Data', 'Sheet1', 'Dados_Respostas_Limpas'];
+      let targetSheetName = possibleSheetNames[0]; // default
+      
+      for (const sheetName of possibleSheetNames) {
+        const foundSheet = spreadsheetInfo.data.sheets.find(s => s.properties.title === sheetName);
+        if (foundSheet) {
+          targetSheetName = sheetName;
+          console.log(`✅ Found target sheet: ${targetSheetName}`);
+          break;
+        }
+      }
+      
+      // If no match found, use the first sheet
+      if (!spreadsheetInfo.data.sheets.find(s => s.properties.title === targetSheetName)) {
+        targetSheetName = spreadsheetInfo.data.sheets[0].properties.title;
+        console.log(`⚠️ Using first available sheet: ${targetSheetName}`);
+      }
+      
+      // Test read access
+      console.log(`🔍 Testing read access on sheet "${targetSheetName}"...`);
+      const testRead = await sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        range: `${targetSheetName}!A1:A1`
+      });
+      console.log(`✅ Read test successful on "${targetSheetName}", proceeding with append...`);
+      
+      // Prepare the row data in the same format as the original sheet
+      const newRow = [
+        `CAS-${Date.now()}`, // מזהה פניה (Case ID)
+        'תשובה שנוצרה באמצעות המערכת', // נושא (Subject)
+        inquiry.substring(0, 100), // תמצית (Summary)
+        inquiry, // הפניה (Full Inquiry)
+        new Date().toLocaleString('he-IL'), // נוצר ב: (Created at)
+        source || 'municipal_inquiry_system', // נוצר על-ידי (Created by)
+        response // תיאור (Response)
+      ];
+
+      // Append to the sheet
+      console.log(`📤 Attempting to append row to sheet "${targetSheetName}"...`);
+      const appendResponse = await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        range: `${targetSheetName}!A:G`, // Append to columns A through G
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: [newRow]
+        }
+      });
+      
+      console.log(`✅ Append operation completed:`, appendResponse.data.updates);
+
+      console.log(`✅ Successfully appended row to Google Sheet`);
+      
+      res.json({ 
+        success: true,
+        message: 'Response appended to Google Sheet successfully',
+        updatedRange: appendResponse.data.updates.updatedRange,
+        updatedRows: appendResponse.data.updates.updatedRows
+      });
+
+    } catch (sheetsError) {
+      console.error('Google Sheets API error:', sheetsError);
+      console.error('Full error details:', JSON.stringify(sheetsError, null, 2));
+      
+      // Try an alternative approach with a fresh authentication
+      console.log('🔄 Trying alternative authentication approach...');
+      try {
+        // Create a completely fresh auth instance
+        const altAuth = new GoogleAuth({
+          keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        });
+        
+        const altAuthClient = await altAuth.getClient();
+        const altSheets = google.sheets({ version: 'v4', auth: altAuthClient });
+        
+        console.log('🔄 Retrying append with fresh authentication...');
+        const retryResponse = await altSheets.spreadsheets.values.append({
+          spreadsheetId: process.env.SPREADSHEET_ID,
+          range: `${targetSheetName}!A:G`,
+          valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS',
+          requestBody: {
+            values: [newRow]
+          }
+        });
+        
+        console.log(`✅ Retry successful with alternative auth!`);
+        res.json({ 
+          success: true,
+          message: 'Response appended to Google Sheet successfully (retry)',
+          updatedRange: retryResponse.data.updates.updatedRange,
+          updatedRows: retryResponse.data.updates.updatedRows
+        });
+        return;
+        
+      } catch (retryError) {
+        console.error('Retry also failed:', retryError);
+      }
+      
+      // If it's a permission error, provide helpful guidance
+      if (sheetsError.message.includes('Insufficient Permission')) {
+        res.status(500).json({ 
+          error: 'Google Sheets permission error',
+          details: `Authentication failed despite correct permissions. Service account may need to be re-shared with the spreadsheet. Error: ${sheetsError.message}`,
+          fallback_suggestion: 'Please check that the service account email has Editor access to the specific sheet tab.',
+          debug_info: {
+            credentials_file: process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'Present' : 'Missing',
+            spreadsheet_id: process.env.SPREADSHEET_ID ? 'Present' : 'Missing',
+            error_code: sheetsError.code
+          }
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Failed to append to Google Sheet',
+          details: sheetsError.message,
+          debug_info: {
+            error_code: sheetsError.code,
+            error_status: sheetsError.status
+          }
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Error in append-to-sheet endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
+  }
+});
+
+// Test Google Sheets connection endpoint
+app.get('/test-sheets', async (req, res) => {
+  try {
+    console.log('🧪 Testing Google Sheets connection...');
+    
+    // Read service account info
+    const credentialsContent = fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8');
+    const credentials = JSON.parse(credentialsContent);
+    
+    // Test authentication
+    const sheets = await authenticateGoogleSheets(false);
+    
+    // Get spreadsheet info
+    const spreadsheetInfo = await sheets.spreadsheets.get({
+      spreadsheetId: process.env.SPREADSHEET_ID
+    });
+    
+    const sheetList = spreadsheetInfo.data.sheets.map(sheet => ({
+      title: sheet.properties.title,
+      id: sheet.properties.sheetId,
+      index: sheet.properties.index
+    }));
+    
+    res.json({
+      success: true,
+      service_account: credentials.client_email,
+      spreadsheet_id: process.env.SPREADSHEET_ID,
+      spreadsheet_title: spreadsheetInfo.data.properties.title,
+      available_sheets: sheetList,
+      credentials_file: process.env.GOOGLE_APPLICATION_CREDENTIALS
+    });
+    
+  } catch (error) {
+    console.error('Test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      error_code: error.code
+    });
+  }
+});
+
+// Session management endpoint
+app.get('/sessions', (req, res) => {
+  const sessionData = [];
+  sessions.forEach((context, sessionId) => {
+    sessionData.push({
+      sessionId,
+      interactionCount: context.history.length,
+      frequentTopics: context.getFrequentTopics()
+    });
+  });
+  res.json({ 
+    totalSessions: sessions.size, 
+    sessions: sessionData 
+  });
+});
+
+// ==================== INTEGRATION MANAGEMENT ENDPOINTS ====================
+
+// Get Google Sheets settings
+app.get('/api/integrations/google-sheets', (req, res) => {
+  try {
+    // Read service account info
+    let serviceAccountEmail = '';
+    try {
+      const credentialsContent = fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8');
+      const credentials = JSON.parse(credentialsContent);
+      serviceAccountEmail = credentials.client_email;
+    } catch (error) {
+      console.warn('Could not read service account email:', error.message);
+    }
+
+    res.json({
+      spreadsheet_id: process.env.SPREADSHEET_ID || '',
+      sheet_name: 'Cleaned_Answers_Data', // Default sheet name
+      service_account_email: serviceAccountEmail,
+      connection_status: dataLoadedSuccessfully ? 'connected' : 'disconnected'
+    });
+  } catch (error) {
+    console.error('Error getting Google Sheets settings:', error);
+    res.status(500).json({ error: 'Failed to load Google Sheets settings' });
+  }
+});
+
+// Get OpenAI settings
+app.get('/api/integrations/openai', (req, res) => {
+  try {
+    res.json({
+      api_key_configured: !!process.env.OPENAI_API_KEY,
+      model: 'gpt-3.5-turbo', // Default model
+      connection_status: openaiAvailable ? 'connected' : 'disconnected'
+    });
+  } catch (error) {
+    console.error('Error getting OpenAI settings:', error);
+    res.status(500).json({ error: 'Failed to load OpenAI settings' });
+  }
+});
+
+// Test Google Sheets connection
+app.post('/api/integrations/test-google-sheets', async (req, res) => {
+  try {
+    const { spreadsheet_id, sheet_name } = req.body;
+    
+    if (!spreadsheet_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'מזהה גיליון (Spreadsheet ID) נדרש' 
+      });
+    }
+
+    console.log('🧪 Testing Google Sheets connection with custom settings...');
+    
+    // Test authentication
+    const sheets = await authenticateGoogleSheets(true); // Read-only test
+    
+    // Test access to the specific spreadsheet
+    const spreadsheetInfo = await sheets.spreadsheets.get({
+      spreadsheetId: spreadsheet_id
+    });
+    
+    // Check if the specific sheet exists
+    const requestedSheet = spreadsheetInfo.data.sheets.find(
+      sheet => sheet.properties.title === (sheet_name || 'Cleaned_Answers_Data')
+    );
+    
+    if (!requestedSheet) {
+      return res.status(400).json({
+        success: false,
+        error: `גיליון בשם "${sheet_name || 'Cleaned_Answers_Data'}" לא נמצא`
+      });
+    }
+
+    // Try to read a small sample to verify permissions
+    await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheet_id,
+      range: `${sheet_name || 'Cleaned_Answers_Data'}!A1:C1`
+    });
+    
+    res.json({
+      success: true,
+      message: 'חיבור הצליח! הגיליון נגיש ופעיל',
+      spreadsheet_title: spreadsheetInfo.data.properties.title,
+      sheet_found: true,
+      sheet_name: requestedSheet.properties.title
+    });
+    
+  } catch (error) {
+    console.error('Google Sheets test failed:', error);
+    
+    let errorMessage = 'שגיאה בחיבור ל-Google Sheets';
+    if (error.message.includes('not found')) {
+      errorMessage = 'מזהה הגיליון לא נמצא או לא נגיש';
+    } else if (error.message.includes('permission')) {
+      errorMessage = 'אין הרשאות גישה לגיליון. יש לשתף את הגיליון עם חשבון השירות';
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+});
+
+// Test OpenAI connection
+app.post('/api/integrations/test-openai', async (req, res) => {
+  try {
+    const { api_key, model } = req.body;
+    
+    if (!api_key) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'מפתח API נדרש' 
+      });
+    }
+
+    if (!api_key.startsWith('sk-')) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'מפתח API לא תקין (צריך להתחיל ב-sk-)' 
+      });
+    }
+
+    console.log('🧪 Testing OpenAI connection...');
+    
+    // Create temporary OpenAI instance for testing
+    const testOpenAI = new OpenAI({
+      apiKey: api_key
+    });
+    
+    // Test with a simple completion
+    const completion = await testOpenAI.chat.completions.create({
+      model: model || 'gpt-3.5-turbo',
+      messages: [
+        { role: 'user', content: 'שלום, זהו בדיקת חיבור' }
+      ],
+      max_tokens: 50
+    });
+    
+    if (completion.choices && completion.choices.length > 0) {
+      res.json({
+        success: true,
+        message: 'חיבור ל-OpenAI הצליח!',
+        model_used: completion.model,
+        test_response: completion.choices[0].message.content
+      });
+    } else {
+      throw new Error('לא התקבלה תשובה תקינה מ-OpenAI');
+    }
+    
+  } catch (error) {
+    console.error('OpenAI test failed:', error);
+    
+    let errorMessage = 'שגיאה בחיבור ל-OpenAI';
+    if (error.message.includes('Incorrect API key')) {
+      errorMessage = 'מפתח API לא תקין';
+    } else if (error.message.includes('quota')) {
+      errorMessage = 'חרגת מכמות השימוש המותרת';
+    } else if (error.message.includes('model')) {
+      errorMessage = 'המודל שנבחר לא זמין';
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+});
+
+// Save Google Sheets settings
+app.post('/api/integrations/save-google-sheets', async (req, res) => {
+  try {
+    const { spreadsheet_id, sheet_name } = req.body;
+    
+    // Here you could save to a config file or database
+    // For now, we'll just validate the settings
+    if (spreadsheet_id) {
+      // Update environment variable (note: this won't persist across restarts)
+      process.env.SPREADSHEET_ID = spreadsheet_id;
+      console.log(`✅ Google Sheets settings updated: ${spreadsheet_id}`);
+    }
+    
+    res.json({
+      success: true,
+      message: 'הגדרות Google Sheets נשמרו בהצלחה',
+      saved_settings: {
+        spreadsheet_id,
+        sheet_name: sheet_name || 'Cleaned_Answers_Data'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error saving Google Sheets settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'שגיאה בשמירת הגדרות Google Sheets'
+    });
+  }
+});
+
+// Save OpenAI settings
+app.post('/api/integrations/save-openai', async (req, res) => {
+  try {
+    const { api_key, model } = req.body;
+    
+    // Update environment variable and reinitialize OpenAI (note: this won't persist across restarts)
+    if (api_key && api_key.startsWith('sk-')) {
+      process.env.OPENAI_API_KEY = api_key;
+      
+      // Reinitialize OpenAI with new key
+      try {
+        openai = new OpenAI({
+          apiKey: api_key
+        });
+        openaiAvailable = true;
+        console.log('✅ OpenAI settings updated and reinitialized');
+      } catch (initError) {
+        console.error('Failed to reinitialize OpenAI:', initError);
+        openaiAvailable = false;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'הגדרות OpenAI נשמרו בהצלחה',
+      saved_settings: {
+        api_key_configured: !!api_key,
+        model: model || 'gpt-3.5-turbo'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error saving OpenAI settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'שגיאה בשמירת הגדרות OpenAI'
+    });
+  }
+});
+
+// Initialize GPT improvements with dependencies
+initializeGPTImprovements(openai, cleanHistoricalResponse);
 
 // Initialize and start server
 async function startServer() {
