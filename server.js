@@ -34,6 +34,19 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
+// Test endpoint to check environment variables
+app.get('/api/test-env', (req, res) => {
+  res.json({
+    hasOpenAI: !!process.env.OPENAI_API_KEY,
+    hasSpreadsheet: !!process.env.SPREADSHEET_ID,
+    hasGoogleCreds: !!process.env.GOOGLE_CREDENTIALS_JSON,
+    hasSessionSecret: !!process.env.SESSION_SECRET,
+    hasAdminPassword: !!process.env.ADMIN_PASSWORD,
+    adminPasswordLength: process.env.ADMIN_PASSWORD?.length,
+    nodeEnv: process.env.NODE_ENV
+  });
+});
+
 // Authentication endpoints (these must be accessible without auth)
 app.post('/api/login', loginHandler);
 app.post('/api/logout', logoutHandler);
@@ -46,6 +59,7 @@ app.use((req, res, next) => {
       req.path.startsWith('/api/login') || 
       req.path.startsWith('/api/logout') ||
       req.path.startsWith('/api/session-info') ||
+      req.path.startsWith('/api/test-env') ||
       req.path === '/exact-search' ||
       req.path.endsWith('.css') || 
       req.path.endsWith('.js') || 
