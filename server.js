@@ -19,6 +19,7 @@ import integrationsRouter from './routes/integrations.js';
 import { loadConfig } from './utils/encryption.js';
 import cookieParser from 'cookie-parser';
 import { loginHandler, logoutHandler, requireAuth, getSessionInfo } from './middleware/sessionAuth.js';
+import { debugEndpointHandler } from './debug-vercel-env.js';
 
 // Load environment variables
 dotenv.config();
@@ -34,21 +35,49 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
+// Comprehensive debug endpoint for environment variables and connections
+app.get('/api/debug-vercel', debugEndpointHandler);
+
 // Test endpoint to check environment variables and connections
 app.get('/api/test-env', async (req, res) => {
-  // Test OpenAI connection
+  // Test OpenAI connection with detailed error reporting
   let openaiStatus = 'not tested';
+  let openaiDetails = {};
   try {
     if (openai) {
+      console.log('🧪 Testing OpenAI API connection...');
       const testCompletion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: "Say 'OK'" }],
-        max_tokens: 5
+        messages: [{ role: "user", content: "Say 'Connection test successful'" }],
+        max_tokens: 10
       });
-      openaiStatus = testCompletion.choices[0]?.message?.content ? 'working' : 'error';
+      
+      if (testCompletion.choices && testCompletion.choices[0]?.message?.content) {
+        openaiStatus = 'working';
+        openaiDetails = {
+          response: testCompletion.choices[0].message.content,
+          model: testCompletion.model,
+          usage: testCompletion.usage
+        };
+        console.log('✅ OpenAI connection test successful');
+      } else {
+        openaiStatus = 'no response';
+        openaiDetails = { error: 'No response received from OpenAI' };
+        console.log('❌ OpenAI returned no response');
+      }
+    } else {
+      openaiStatus = 'not initialized';
+      openaiDetails = { error: 'OpenAI instance not created' };
     }
   } catch (err) {
     openaiStatus = `error: ${err.message}`;
+    openaiDetails = {
+      error: err.message,
+      code: err.code,
+      status: err.status,
+      type: err.type
+    };
+    console.error('❌ OpenAI connection test failed:', err.message);
   }
 
   // Test Google Sheets authentication
@@ -77,6 +106,7 @@ app.get('/api/test-env', async (req, res) => {
 
   res.json({
     hasOpenAI: !!process.env.OPENAI_API_KEY,
+    openaiKeyLength: process.env.OPENAI_API_KEY?.length,
     hasSpreadsheet: !!process.env.SPREADSHEET_ID,
     spreadsheetId: process.env.SPREADSHEET_ID?.substring(0, 10) + '...',
     hasGoogleCreds: !!process.env.GOOGLE_CREDENTIALS_JSON,
@@ -89,7 +119,11 @@ app.get('/api/test-env', async (req, res) => {
     nodeEnv: process.env.NODE_ENV,
     dataLoaded: municipalData.length,
     dataLoadedSuccessfully: dataLoadedSuccessfully,
-    openaiStatus: openaiStatus
+    openaiStatus: openaiStatus,
+    openaiDetails: openaiDetails,
+    isVercel: !!process.env.VERCEL || !!process.env.NOW_REGION,
+    platform: process.platform,
+    nodeVersion: process.version
   });
 });
 
@@ -165,18 +199,70 @@ function loadAndApplyConfig() {
 function initializeOpenAI(apiKey = null) {
   try {
     const key = apiKey || process.env.OPENAI_API_KEY;
-    if (key && key.startsWith('sk-')) {
-      openai = new OpenAI({ apiKey: key });
-      openaiAvailable = true;
-      console.log('✅ OpenAI API key configured');
-      return true;
-    } else {
-      console.log('⚠️ OpenAI API key not found or invalid - falling back to text similarity');
+    
+    console.log('🤖 Initializing OpenAI...');
+    console.log(`🔑 API Key present: ${!!key}`);
+    
+    if (!key) {
+      console.log('❌ No OpenAI API key found in environment');
+      console.log('🔍 Checked variables: OPENAI_API_KEY');
       openaiAvailable = false;
       return false;
     }
+    
+    console.log(`🔑 API Key length: ${key.length}`);
+    console.log(`🔑 API Key prefix: ${key.substring(0, 7)}...`);
+    console.log(`🔑 API Key suffix: ...${key.substring(key.length - 4)}`);
+    
+    // Check for whitespace issues
+    if (key !== key.trim()) {
+      console.warn('⚠️ API key has leading or trailing whitespace - trimming');
+      key = key.trim();
+    }
+    
+    // Validate key format
+    if (!key.startsWith('sk-')) {
+      console.error('❌ OpenAI API key format invalid - must start with "sk-"');
+      console.error(`🔍 Actual prefix: "${key.substring(0, 10)}"`);
+      openaiAvailable = false;
+      return false;
+    }
+    
+    // Check key length (typical OpenAI keys are around 48-50 characters)
+    if (key.length < 40 || key.length > 60) {
+      console.warn(`⚠️ Unusual API key length: ${key.length} (expected 48-50)`);
+    }
+    
+    // Check for invalid characters
+    const validCharsRegex = /^[a-zA-Z0-9\-_]+$/;
+    if (!validCharsRegex.test(key)) {
+      console.warn('⚠️ API key contains unexpected characters');
+    }
+    
+    try {
+      openai = new OpenAI({ apiKey: key });
+      openaiAvailable = true;
+      console.log('✅ OpenAI instance created successfully');
+      console.log('🔍 Will test connection on first API call');
+      return true;
+    } catch (createError) {
+      console.error('❌ Failed to create OpenAI instance:', createError.message);
+      console.error('🔍 Create error details:', {
+        message: createError.message,
+        code: createError.code,
+        type: createError.constructor.name
+      });
+      openaiAvailable = false;
+      return false;
+    }
+    
   } catch (error) {
-    console.log('⚠️ OpenAI initialization failed - falling back to text similarity');
+    console.error('❌ OpenAI initialization failed:', error.message);
+    console.error('🔍 Initialization error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+    });
     openaiAvailable = false;
     return false;
   }
@@ -219,35 +305,116 @@ async function authenticateGoogleSheets(readOnly = true) {
     // Check if we're in Vercel environment (has JSON string in env)
     if (process.env.GOOGLE_CREDENTIALS_JSON) {
       console.log('📱 Using Google credentials from environment variable (Vercel mode)');
+      console.log(`🔍 GOOGLE_CREDENTIALS_JSON length: ${process.env.GOOGLE_CREDENTIALS_JSON.length}`);
+      console.log(`🔍 First 100 chars: ${process.env.GOOGLE_CREDENTIALS_JSON.substring(0, 100)}...`);
       
-      // Parse the JSON string from environment variable
-      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+      // Detailed parsing with error catching
+      let credentials;
+      try {
+        credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        console.log('✅ Successfully parsed GOOGLE_CREDENTIALS_JSON');
+        console.log(`📧 Service Account Email: ${credentials.client_email}`);
+        console.log(`🏷️ Project ID: ${credentials.project_id}`);
+        console.log(`🔑 Has Private Key: ${!!credentials.private_key}`);
+        console.log(`🔑 Private Key Length: ${credentials.private_key?.length || 0}`);
+        
+        // Check for common issues
+        if (!credentials.private_key?.includes('-----BEGIN PRIVATE KEY-----')) {
+          console.warn('⚠️ Private key may be malformed - missing header');
+        }
+        
+        if (credentials.private_key?.includes('\\n')) {
+          console.warn('⚠️ Private key contains literal \\n - may need unescaping');
+          console.log('🔧 Attempting to fix newline escapes in private key...');
+          credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+        }
+        
+      } catch (parseError) {
+        console.error('❌ Failed to parse GOOGLE_CREDENTIALS_JSON:', parseError.message);
+        console.error('🔍 Parse error position:', parseError.message.match(/position (\d+)/)?.[1]);
+        
+        if (parseError.message.match(/position (\d+)/)) {
+          const pos = parseInt(parseError.message.match(/position (\d+)/)[1]);
+          const context = process.env.GOOGLE_CREDENTIALS_JSON.substring(Math.max(0, pos - 30), pos + 30);
+          console.error(`🔍 Error context: "${context}"`);
+        }
+        
+        throw new Error(`GOOGLE_CREDENTIALS_JSON parsing failed: ${parseError.message}`);
+      }
       
       // Create auth with parsed credentials
-      auth = new GoogleAuth({
-        credentials: credentials,
-        scopes: scopes
-      });
+      try {
+        auth = new GoogleAuth({
+          credentials: credentials,
+          scopes: scopes
+        });
+        console.log('✅ Successfully created GoogleAuth instance');
+      } catch (authError) {
+        console.error('❌ Failed to create GoogleAuth instance:', authError.message);
+        throw new Error(`GoogleAuth creation failed: ${authError.message}`);
+      }
       
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
       console.log('📁 Using Google credentials from file (local mode)');
+      console.log(`📁 Credentials file: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
       
       // Use local file (development mode)
-      auth = new GoogleAuth({
-        keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-        scopes: scopes
-      });
+      try {
+        auth = new GoogleAuth({
+          keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          scopes: scopes
+        });
+        console.log('✅ Successfully created GoogleAuth instance from file');
+      } catch (authError) {
+        console.error('❌ Failed to create GoogleAuth from file:', authError.message);
+        throw new Error(`GoogleAuth file creation failed: ${authError.message}`);
+      }
       
     } else {
-      throw new Error('No Google credentials found. Set either GOOGLE_CREDENTIALS_JSON (for Vercel) or GOOGLE_APPLICATION_CREDENTIALS (for local file)');
+      const errorMsg = 'No Google credentials found. Set either GOOGLE_CREDENTIALS_JSON (for Vercel) or GOOGLE_APPLICATION_CREDENTIALS (for local file)';
+      console.error('❌', errorMsg);
+      console.error('🔍 Available env vars:', {
+        GOOGLE_CREDENTIALS_JSON: !!process.env.GOOGLE_CREDENTIALS_JSON,
+        GOOGLE_APPLICATION_CREDENTIALS: !!process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        FILE_EXISTS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS) : false
+      });
+      throw new Error(errorMsg);
     }
     
-    const authClient = await auth.getClient();
-    const sheets = google.sheets({ version: 'v4', auth: authClient });
+    // Get auth client with detailed error handling
+    let authClient;
+    try {
+      console.log('🔐 Getting auth client...');
+      authClient = await auth.getClient();
+      console.log('✅ Successfully created auth client');
+    } catch (clientError) {
+      console.error('❌ Failed to get auth client:', clientError.message);
+      console.error('🔍 Client error details:', {
+        code: clientError.code,
+        status: clientError.status,
+        message: clientError.message
+      });
+      throw new Error(`Auth client creation failed: ${clientError.message}`);
+    }
     
-    return sheets;
+    // Create sheets API instance
+    try {
+      const sheets = google.sheets({ version: 'v4', auth: authClient });
+      console.log('✅ Successfully created Sheets API instance');
+      return sheets;
+    } catch (sheetsError) {
+      console.error('❌ Failed to create Sheets API instance:', sheetsError.message);
+      throw new Error(`Sheets API creation failed: ${sheetsError.message}`);
+    }
+    
   } catch (error) {
-    console.error('❌ Error authenticating with Google Sheets:', error);
+    console.error('❌ Error authenticating with Google Sheets:', error.message);
+    console.error('🔍 Full error object:', {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      stack: error.stack?.split('\n').slice(0, 5).join('\n')
+    });
     throw error;
   }
 }
