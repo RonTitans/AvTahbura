@@ -32,7 +32,8 @@ const PORT = process.env.PORT || 8009;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ type: 'application/json' }));
+app.use(express.text({ type: 'text/plain' }));
 app.use(cookieParser());
 
 // Comprehensive debug endpoint for environment variables and connections
@@ -154,6 +155,7 @@ app.use((req, res, next) => {
       req.path === '/exact-search' ||
       req.path === '/search-by-line' ||
       req.path === '/search-by-ticket' ||
+      req.path === '/generate-official-response' ||
       req.path.endsWith('.css') || 
       req.path.endsWith('.js') || 
       req.path.endsWith('.ico') ||
