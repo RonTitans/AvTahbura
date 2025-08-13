@@ -27,6 +27,8 @@ function generateSessionId() {
 export async function loginHandler(req, res) {
   const { username, password } = req.body;
   
+  console.log('Login attempt received:', { username, passwordLength: password?.length });
+  
   // For simplified login, we only check password
   if (!password) {
     return res.status(400).json({ 
@@ -36,6 +38,8 @@ export async function loginHandler(req, res) {
   }
   
   const adminPassword = process.env.ADMIN_PASSWORD;
+  
+  console.log('Admin password configured:', !!adminPassword);
   
   if (!adminPassword) {
     console.error('Admin password not configured');
@@ -48,6 +52,7 @@ export async function loginHandler(req, res) {
   // Verify password directly (simplified for deployment)
   try {
     const isValidPassword = password === adminPassword;
+    console.log('Password validation result:', isValidPassword);
     
     if (!isValidPassword) {
       return res.status(401).json({ 
@@ -59,7 +64,7 @@ export async function loginHandler(req, res) {
     // Create session
     const sessionId = generateSessionId();
     const session = {
-      userId: username,
+      userId: 'admin',
       createdAt: Date.now(),
       lastAccessed: Date.now()
     };
