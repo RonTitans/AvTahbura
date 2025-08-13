@@ -85,18 +85,29 @@ app.get('/api/test-env', async (req, res) => {
   let serviceAccountEmail = 'unknown';
   try {
     if (process.env.GOOGLE_CREDENTIALS_JSON) {
-      const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-      serviceAccountEmail = creds.client_email || 'parse error';
+      try {
+        const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        serviceAccountEmail = creds.client_email || 'parse error';
+      } catch (parseErr) {
+        serviceAccountEmail = 'JSON parse error';
+        googleSheetsStatus = `parse error: ${parseErr.message}`;
+      }
       
-      // Try to authenticate
-      const sheets = await authenticateGoogleSheets();
-      
-      // Try to read sheet info
-      const info = await sheets.spreadsheets.get({
-        spreadsheetId: process.env.SPREADSHEET_ID
-      });
-      
-      googleSheetsStatus = `connected to: ${info.data.properties.title}`;
+      if (serviceAccountEmail !== 'JSON parse error') {
+        try {
+          // Try to authenticate
+          const sheets = await authenticateGoogleSheets();
+          
+          // Try to read sheet info
+          const info = await sheets.spreadsheets.get({
+            spreadsheetId: process.env.SPREADSHEET_ID?.trim()
+          });
+          
+          googleSheetsStatus = `connected to: ${info.data.properties.title}`;
+        } catch (authErr) {
+          googleSheetsStatus = `auth error: ${authErr.message}`;
+        }
+      }
     } else {
       googleSheetsStatus = 'no credentials';
     }
@@ -444,7 +455,7 @@ async function loadDataFromSheets() {
     
     // Read all data from the sheet
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
+      spreadsheetId: process.env.SPREADSHEET_ID?.trim(),
       range: 'Cleaned_Answers_Data!A:Z'
     });
     
