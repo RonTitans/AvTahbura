@@ -15,6 +15,10 @@ import {
   ConversationContext,
   initializeGPTImprovements
 } from './gpt-improvements.js';
+import integrationsRouter from './routes/integrations.js';
+import { loadConfig } from './utils/encryption.js';
+import cookieParser from 'cookie-parser';
+import { loginHandler, logoutHandler, requireAuth, getSessionInfo } from './middleware/sessionAuth.js';
 
 // Load environment variables
 dotenv.config();
@@ -28,7 +32,39 @@ const PORT = process.env.PORT || 8009;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
+
+// Authentication endpoints (these must be accessible without auth)
+app.post('/api/login', loginHandler);
+app.post('/api/logout', logoutHandler);
+app.get('/api/session-info', getSessionInfo);
+
+// Apply authentication middleware with proper exclusions
+app.use((req, res, next) => {
+  // Skip auth for login page, auth APIs, exact search, and static assets
+  if (req.path === '/login.html' || 
+      req.path.startsWith('/api/login') || 
+      req.path.startsWith('/api/logout') ||
+      req.path.startsWith('/api/session-info') ||
+      req.path === '/exact-search' ||
+      req.path.endsWith('.css') || 
+      req.path.endsWith('.js') || 
+      req.path.endsWith('.ico') ||
+      req.path.endsWith('.png') ||
+      req.path.endsWith('.jpg') ||
+      req.path.endsWith('.svg')) {
+    return next();
+  }
+  
+  // For all other routes, require authentication
+  requireAuth(req, res, next);
+});
+
+// Serve static files (including login.html) - this will handle login.html properly
 app.use(express.static('public'));
+
+// Mount integrations routes (now protected by session auth)
+app.use('/integrations', integrationsRouter);
 
 // Global data store
 let municipalData = [];
@@ -40,20 +76,62 @@ let embeddingsReady = false;
 let openai = null;
 let openaiAvailable = false;
 
-try {
-  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('sk-')) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-    openaiAvailable = true;
-    console.log('✅ OpenAI API key configured');
-  } else {
-    console.log('⚠️ OpenAI API key not found or invalid - falling back to text similarity');
+// Load configuration from encrypted file if available
+function loadAndApplyConfig() {
+  try {
+    const config = loadConfig();
+    
+    // Apply Google Sheets config
+    if (config.googleSheets?.spreadsheetId) {
+      process.env.SPREADSHEET_ID = config.googleSheets.spreadsheetId;
+    }
+    
+    // Apply OpenAI config
+    if (config.openai?.apiKey) {
+      process.env.OPENAI_API_KEY = config.openai.apiKey;
+    }
+  } catch (error) {
+    console.log('⚠️ Could not load encrypted config, using environment variables');
   }
-} catch (error) {
-  console.log('⚠️ OpenAI initialization failed - falling back to text similarity');
-  openaiAvailable = false;
 }
+
+// Initialize OpenAI
+function initializeOpenAI(apiKey = null) {
+  try {
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (key && key.startsWith('sk-')) {
+      openai = new OpenAI({ apiKey: key });
+      openaiAvailable = true;
+      console.log('✅ OpenAI API key configured');
+      return true;
+    } else {
+      console.log('⚠️ OpenAI API key not found or invalid - falling back to text similarity');
+      openaiAvailable = false;
+      return false;
+    }
+  } catch (error) {
+    console.log('⚠️ OpenAI initialization failed - falling back to text similarity');
+    openaiAvailable = false;
+    return false;
+  }
+}
+
+// Load config and initialize
+loadAndApplyConfig();
+initializeOpenAI();
+
+// Global functions for integrations
+global.refreshGoogleCache = async function() {
+  console.log('🔄 Refreshing Google Sheets cache...');
+  await loadDataFromSheets();
+};
+
+global.reinitializeOpenAI = function(apiKey) {
+  console.log('🔄 Reinitializing OpenAI...');
+  initializeOpenAI(apiKey);
+  // Reinitialize GPT improvements with new OpenAI instance
+  initializeGPTImprovements(openai, cleanHistoricalResponse);
+};
 
 // GPT improvements will be initialized after function definitions
 
@@ -69,18 +147,41 @@ async function authenticateGoogleSheets(readOnly = true) {
     const scopes = readOnly 
       ? ['https://www.googleapis.com/auth/spreadsheets.readonly']
       : ['https://www.googleapis.com/auth/spreadsheets'];
+    
+    let auth;
+    
+    // Check if we're in Vercel environment (has JSON string in env)
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+      console.log('📱 Using Google credentials from environment variable (Vercel mode)');
       
-    const auth = new GoogleAuth({
-      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-      scopes: scopes
-    });
+      // Parse the JSON string from environment variable
+      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+      
+      // Create auth with parsed credentials
+      auth = new GoogleAuth({
+        credentials: credentials,
+        scopes: scopes
+      });
+      
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+      console.log('📁 Using Google credentials from file (local mode)');
+      
+      // Use local file (development mode)
+      auth = new GoogleAuth({
+        keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        scopes: scopes
+      });
+      
+    } else {
+      throw new Error('No Google credentials found. Set either GOOGLE_CREDENTIALS_JSON (for Vercel) or GOOGLE_APPLICATION_CREDENTIALS (for local file)');
+    }
     
     const authClient = await auth.getClient();
     const sheets = google.sheets({ version: 'v4', auth: authClient });
     
     return sheets;
   } catch (error) {
-    console.error('Error authenticating with Google Sheets:', error);
+    console.error('❌ Error authenticating with Google Sheets:', error);
     throw error;
   }
 }
@@ -135,16 +236,25 @@ async function loadDataFromSheets() {
         console.log(`📝 Row ${i}: Inquiry="${inquiryText.substring(0, 40)}...", Response="${responseText.substring(0, 40)}...", HasOfficialKeywords=${containsOfficialKeywords(responseText)}`);
       }
       
-      // Only include entries that have both inquiry and response with official keywords
-      if (inquiryText.trim() && responseText.trim() && containsOfficialKeywords(responseText)) {
+      // Include ALL entries that have some text (for precise search)
+      // But mark which ones have official responses (for regular search)
+      if (inquiryText.trim() || responseText.trim()) {
+        const hasOfficialResponse = containsOfficialKeywords(responseText);
+        
         // Clean the response text of internal references before storing
-        const cleanedResponse = cleanHistoricalResponse(responseText.trim());
+        const cleanedResponse = responseText.trim() ? cleanHistoricalResponse(responseText.trim()) : '';
         entry.inquiry_text = inquiryText.trim();
         entry.response_text = cleanedResponse;
         entry.row_number = i; // Add row number from spreadsheet
         entry.created_date = entry['נוצר ב:'] || ''; // Add creation date
+        entry.has_official_response = hasOfficialResponse; // Mark if it has official keywords
+        entry.inquiry = entry['הפניה'] || ''; // Keep original inquiry
+        entry.response = entry['תיאור'] || ''; // Keep original response
         municipalData.push(entry);
-        responsesFound++;
+        
+        if (hasOfficialResponse) {
+          responsesFound++;
+        }
       }
       
       processedCount++;
@@ -554,7 +664,7 @@ async function generateFinalResponse(inquiryText, historicalResponse = null) {
   // If OpenAI is available, use it to generate a fresh response
   if (openaiAvailable && openai) {
     try {
-      let systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בעיריית ירושלים. 
+      let systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בתוכנית אב לתחבורה. 
 תפקידך לכתוב תשובה סופית ומלאה לאזרח - לא הסבר פנימי או סיכום.
 
 מבנה התשובה הנדרש (חובה לכל תשובה):
@@ -616,7 +726,7 @@ async function generateFinalResponse(inquiryText, historicalResponse = null) {
 
 בברכה,
 מחלקת תחבורה ציבורית
-עיריית ירושלים`;
+תוכנית אב לתחבורה`;
 }
 
 // Recommendation endpoint with comprehensive debugging
@@ -756,6 +866,242 @@ app.post('/recommend', async (req, res) => {
   }
 });
 
+// NEW: Exact phrase search endpoint (added for demo - does NOT change existing functionality)
+app.post('/exact-search', async (req, res) => {
+  try {
+    const { searchPhrase } = req.body;
+    
+    if (!searchPhrase || searchPhrase.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Search phrase is required',
+        matches: []
+      });
+    }
+
+    console.log(`\n🔍 Exact phrase search for: "${searchPhrase}"`);
+    
+    // Search for exact phrase in all entries
+    const matches = [];
+    const searchLower = searchPhrase.toLowerCase();
+    
+    municipalData.forEach((entry) => {
+      // For regular/exact search, only use entries with official responses
+      if (!entry.has_official_response) return;
+      
+      // Search in both inquiry and response using correct field names
+      const inquiryLower = (entry.inquiry_text || '').toLowerCase();
+      const responseLower = (entry.response_text || '').toLowerCase();
+      
+      if (inquiryLower.includes(searchLower) || responseLower.includes(searchLower)) {
+        // Count occurrences
+        const inquiryCount = (inquiryLower.match(new RegExp(searchLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        const responseCount = (responseLower.match(new RegExp(searchLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        
+        matches.push({
+          case_id: entry.case_id,
+          inquiry: entry.inquiry_text,
+          response: entry.response_text,
+          relevance_score: 1.0, // Exact match always gets score 1
+          occurrences: {
+            in_inquiry: inquiryCount,
+            in_response: responseCount,
+            total: inquiryCount + responseCount
+          },
+          found_in: inquiryCount > 0 && responseCount > 0 ? 'both' : 
+                    inquiryCount > 0 ? 'inquiry' : 'response'
+        });
+      }
+    });
+    
+    // Sort by total occurrences
+    matches.sort((a, b) => b.occurrences.total - a.occurrences.total);
+    
+    console.log(`✅ Found ${matches.length} exact matches for "${searchPhrase}"`);
+    
+    res.json({
+      success: true,
+      search_phrase: searchPhrase,
+      total_matches: matches.length,
+      matches: matches.slice(0, 50), // Limit to top 50 results
+      search_type: 'exact_phrase'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in /exact-search endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      matches: []
+    });
+  }
+});
+
+// NEW: Precise search by bus line endpoint
+app.post('/search-by-line', async (req, res) => {
+  try {
+    const { busLines, originalQuery } = req.body;
+    
+    if (!busLines || !Array.isArray(busLines) || busLines.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Bus lines array is required',
+        matches: []
+      });
+    }
+
+    console.log(`\n🚌 Precise search for bus lines: ${busLines.join(', ')}`);
+    
+    const matches = [];
+    const linesSet = new Set(busLines.map(line => line.toString()));
+    let debugCount = 0;
+    
+    municipalData.forEach((entry, idx) => {
+      // ONLY search in תמצית column as requested
+      const summary = entry['תמצית'] || '';
+      
+      // Debug logging for line 630
+      if (busLines.includes('630') && summary.includes('630')) {
+        debugCount++;
+        console.log(`  Found 630 in row ${idx}: ${summary.substring(0, 80)}...`);
+      }
+      
+      let lineMatches = 0;
+      let foundLines = [];
+      
+      // Check for exact line number matches in תמצית only
+      busLines.forEach(line => {
+        // Use word boundary regex to avoid partial matches
+        // This will match "קו 30" or "30" but NOT "630" or "305"
+        const patterns = [
+          new RegExp(`\\b${line}\\b`, 'g'),  // Word boundary on both sides
+          new RegExp(`קו\\s+${line}\\b`, 'g'),  // "קו 30" pattern
+          new RegExp(`קווים[^0-9]*${line}\\b`, 'g'),  // "קווים" followed by the line
+        ];
+        
+        let matched = false;
+        for (const pattern of patterns) {
+          if (pattern.test(summary)) {
+            matched = true;
+            break;
+          }
+        }
+        
+        if (matched) {
+          lineMatches++;
+          if (!foundLines.includes(line)) {
+            foundLines.push(line);
+          }
+        }
+      });
+      
+      if (lineMatches > 0) {
+        matches.push({
+          case_id: entry.case_id || entry['מזהה פניה'],
+          summary: entry['תמצית'] || '',  // Add the תמצית field
+          inquiry: entry.inquiry || entry['הפניה'] || '',  // Full question
+          response: entry.response || entry['תיאור'] || '',
+          line_matches: lineMatches,
+          found_lines: foundLines,
+          created_date: entry['נוצר ב:'] || entry.created_date || null,
+          relevance_score: Math.min(1.0, lineMatches / busLines.length)
+        });
+      }
+    });
+    
+    // Sort by line matches (descending) and relevance
+    matches.sort((a, b) => {
+      if (b.line_matches !== a.line_matches) {
+        return b.line_matches - a.line_matches;
+      }
+      return b.relevance_score - a.relevance_score;
+    });
+    
+    if (busLines.includes('630')) {
+      console.log(`📊 Debug: Found "630" in ${debugCount} תמצית entries total`);
+    }
+    console.log(`✅ Found ${matches.length} precise matches for bus lines: ${busLines.join(', ')}`);
+    
+    res.json({
+      success: true,
+      search_type: 'precise_bus_line',
+      bus_lines: busLines,
+      original_query: originalQuery,
+      total_matches: matches.length,
+      matches: matches // Return all results, frontend handles display
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in /search-by-line endpoint:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error',
+      matches: []
+    });
+  }
+});
+
+// NEW: Ticket ID timeline search endpoint
+app.post('/search-by-ticket', async (req, res) => {
+  try {
+    const { ticketId } = req.body;
+    
+    if (!ticketId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Ticket ID is required',
+        entries: []
+      });
+    }
+
+    console.log(`\n🎫 Ticket timeline search for: ${ticketId}`);
+    
+    const entries = [];
+    const ticketIdUpper = ticketId.toUpperCase();
+    
+    // Find all entries with matching ticket ID
+    municipalData.forEach((entry) => {
+      if (entry.case_id === ticketIdUpper) {
+        entries.push({
+          case_id: entry.case_id,
+          inquiry: entry.inquiry || entry['הפניה'] || '',
+          response: entry.response || entry['תיאור'] || '',
+          summary: entry['תמצית'] || '',
+          timestamp: entry.timestamp || entry['נוצר ב:'] || 'לא זמין',
+          author: entry.author || entry['נוצר על-ידי'] || 'לא זמין',
+          content: entry.response || entry.inquiry,
+          type: entry.response ? 'response' : 'inquiry',
+          row_number: entry.row_number || 0 // Add row number from spreadsheet
+        });
+      }
+    });
+    
+    // Sort chronologically (if timestamps available)
+    entries.sort((a, b) => {
+      if (a.timestamp && b.timestamp && a.timestamp !== 'לא זמין' && b.timestamp !== 'לא זמין') {
+        return new Date(a.timestamp) - new Date(b.timestamp);
+      }
+      return 0; // Keep original order if no timestamps
+    });
+    
+    console.log(`✅ Found ${entries.length} entries for ticket: ${ticketId}`);
+    
+    res.json({
+      success: true,
+      search_type: 'ticket_timeline',
+      ticket_id: ticketId,
+      total_entries: entries.length,
+      entries: entries
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in /search-by-ticket endpoint:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error',
+      entries: []
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -847,7 +1193,7 @@ ${selected_response}
     }
 
     // Use OpenAI to generate an official response
-    const systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בעיריית ירושלים. 
+    const systemPrompt = `אתה נציג מחלקת תחבורה ציבורית בתוכנית אב לתחבורה. 
 תפקידך לכתוב תשובה רשמית לאזרח בהתבסס על תשובה דומה שנמצאה במערכת.
 
 הנחיות חשובות:

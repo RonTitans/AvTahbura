@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מערכת פניות תחבורה - עיריית ירושלים</title>
+    <title>מערכת פניות תחבורה - תוכנית אב לתחבורה</title>
     <style>
         * {
             margin: 0;
@@ -410,39 +410,145 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="logo">🚌</div>
-            <h1>מערכת פניות תחבורה</h1>
-            <p class="subtitle">עיריית ירושלים - מחלקת תחבורה ציבורית</p>
-            <div style="margin-top: 20px;">
+        <div class="header" style="position: relative;">
+            <!-- Corner buttons inside the card -->
+            <div style="position: absolute; top: 15px; left: 15px;">
+                <button onclick="logout()" style="
+                    background: #e53e3e;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3);
+                " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(229, 62, 62, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(229, 62, 62, 0.3)';">
+                    🚪 יציאה
+                </button>
+            </div>
+            
+            <div style="position: absolute; top: 15px; right: 15px;">
                 <a href="/integrations.html" style="
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
                     text-decoration: none;
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    font-size: 14px;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-size: 12px;
                     font-weight: 600;
                     transition: all 0.3s ease;
-                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)';" 
-                   onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.3)';">
-                    ⚙️ הגדרות אינטגרציות
+                    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+                    display: inline-block;
+                " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.3)';">
+                    ⚙️ אינטגרציות
                 </a>
             </div>
+            
+            <div class="logo">🚌</div>
+            <h1>מערכת פניות תחבורה</h1>
+            <p class="subtitle">תוכנית אב לתחבורה - מחלקת תחבורה ציבורית</p>
         </div>
 
         <form id="inquiryForm">
             <div class="form-group">
                 <label for="inquiry">הזן את הפנייה שלך:</label>
+                
+                <!-- Search Mode Switcher -->
+                <div class="mode-switcher" style="
+                    display: flex;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 8px;
+                    background: #f7fafc;
+                    margin-bottom: 16px;
+                    overflow: hidden;
+                ">
+                    <button type="button" class="mode-btn" data-mode="regular" aria-pressed="true" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: #4299e1;
+                        color: white;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        רגיל
+                    </button>
+                    <button type="button" class="mode-btn" data-mode="precise" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        מדויק
+                    </button>
+                    <button type="button" class="mode-btn" data-mode="ticket" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        לפי מזהה פנייה
+                    </button>
+                </div>
+                
                 <textarea 
                     id="inquiry" 
                     name="inquiry" 
                     placeholder="לדוגמה: קו 408 שינוי מסלול בית שמש"
                     required
                 ></textarea>
+                
+                <!-- Inline validation tip -->
+                <div id="modeTip" class="mode-tip" style="
+                    font-size: 12px;
+                    color: #e53e3e;
+                    margin-top: 8px;
+                    min-height: 16px;
+                    display: none;
+                "></div>
             </div>
-            <button type="submit">שלח פנייה</button>
+            
+            <div class="button-container" style="
+                display: flex;
+                justify-content: center;
+                margin-top: 20px;
+            ">
+                <button type="submit" id="searchBtn" style="
+                    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+                    color: white;
+                    padding: 16px 32px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 18px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    min-width: 200px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(66, 153, 225, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(66, 153, 225, 0.3)';">
+                    🔍 חפש
+                </button>
+            </div>
         </form>
 
         <div class="loading" id="loading">
@@ -454,56 +560,190 @@
     </div>
 
     <script>
-        const form = document.getElementById('inquiryForm');
-        const loading = document.getElementById('loading');
-        const results = document.getElementById('results');
-        const inquiryInput = document.getElementById('inquiry');
-
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('inquiryForm');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const inquiryInput = document.getElementById('inquiry');
+            const searchBtn = document.getElementById('searchBtn');
+            const modeTip = document.getElementById('modeTip');
+        
+        let currentMode = 'regular';
+        let currentInquiry = '';
+        let currentOfficialResponse = '';
+        let isEditing = false;
+        let currentData = null;
+        
+        // Define functions first
+        function setActiveMode(mode) {
+            const modeButtons = document.querySelectorAll('.mode-btn');
+            modeButtons.forEach(btn => {
+                const isActive = btn.dataset.mode === mode;
+                btn.setAttribute('aria-pressed', isActive);
+                btn.style.background = isActive ? '#4299e1' : 'transparent';
+                btn.style.color = isActive ? 'white' : '#4a5568';
+            });
+        }
+        
+        function updatePlaceholder() {
+            const placeholders = {
+                regular: 'לדוגמה: קו 408 שינוי מסלול בית שמש',
+                precise: 'לדוגמה: קו 630',
+                ticket: 'לדוגמה: CAS-665326-T5D8X2'
+            };
+            inquiryInput.placeholder = placeholders[currentMode];
+        }
+        
+        function validateInput() {
+            const input = inquiryInput.value.trim();
+            modeTip.style.display = 'none';
+            searchBtn.disabled = false;
+            
+            if (!input) {
+                searchBtn.disabled = true;
+                return;
+            }
+            
+            if (currentMode === 'precise') {
+                const busLinePattern = /(?:קו\s*(\d+[א-ת]?)|\b(\d+[א-ת]?)\b)/g;
+                const matches = input.match(busLinePattern);
+                if (!matches) {
+                    modeTip.textContent = 'נא להזין מספר קו לחיפוש מדויק';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
+            } else if (currentMode === 'ticket') {
+                const ticketPattern = /CAS-[A-Z0-9]+-[A-Z0-9]+/i;
+                if (!ticketPattern.test(input)) {
+                    modeTip.textContent = 'נא להזין מזהה פנייה תקין (למשל CAS-… )';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load saved mode from localStorage
+        const savedMode = localStorage.getItem('searchMode');
+        if (savedMode && ['regular', 'precise', 'ticket'].includes(savedMode)) {
+            currentMode = savedMode;
+        }
+        // Always set the active mode on load
+        setActiveMode(currentMode);
+        updatePlaceholder();
+        
+        // Mode switcher functionality
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                currentMode = mode;
+                setActiveMode(mode);
+                localStorage.setItem('searchMode', mode);
+                updatePlaceholder();
+                
+                // Clear previous search when switching modes
+                inquiryInput.value = '';
+                results.style.display = 'none';
+                results.innerHTML = '';
+                modeTip.style.display = 'none';
+                searchBtn.disabled = true;  // Disable until user types
+                
+                // Focus on input for better UX
+                inquiryInput.focus();
+            });
+        });
+        
+        // Input validation on type
+        inquiryInput.addEventListener('input', validateInput);
+        
+        // Keyboard shortcuts
+        inquiryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!searchBtn.disabled) {
+                    form.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+        
+        // Form submit handler - main search logic
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const input = inquiryInput.value.trim();
+            if (!input) return;
             
-            const inquiry = inquiryInput.value.trim();
-            if (!inquiry) return;
-
-            // Show loading, hide results
+            currentInquiry = input;
             loading.style.display = 'block';
             results.style.display = 'none';
-            form.querySelector('button').disabled = true;
-
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'מחפש…';
+            
             try {
-                const response = await fetch('http://localhost:8009/recommend', {
+                let endpoint, requestBody, searchType;
+                
+                if (currentMode === 'regular') {
+                    endpoint = '/recommend';
+                    requestBody = {
+                        inquiry_text: input,
+                        max_recommendations: 5
+                    };
+                    searchType = 'רגיל';
+                } else if (currentMode === 'precise') {
+                    endpoint = '/search-by-line';
+                    const busLinePattern = /(?:קו\s*(\d+[א-ת]?)|\b(\d+[א-ת]?)\b)/g;
+                    const lines = [...input.matchAll(busLinePattern)].map(match => match[1] || match[2]);
+                    requestBody = {
+                        busLines: lines,
+                        originalQuery: input
+                    };
+                    searchType = 'מדויק · קווים: ' + lines.join(', ');
+                } else if (currentMode === 'ticket') {
+                    endpoint = '/search-by-ticket';
+                    const ticketMatch = input.match(/CAS-[A-Z0-9]+-[A-Z0-9]+/i);
+                    const ticketId = ticketMatch ? ticketMatch[0].toUpperCase() : input;
+                    requestBody = {
+                        ticketId: ticketId
+                    };
+                    searchType = 'לפי מזהה פנייה: ' + ticketId;
+                }
+                
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        inquiry_text: inquiry,
-                        max_recommendations: 5
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
-                if (!response.ok) {
-                    throw new Error('שגיאה בשליחת הפנייה');
-                }
-
                 const data = await response.json();
-                currentData = data;
-                currentInquiry = inquiry;
-                displayResults(data);
+                
+                if (currentMode === 'regular') {
+                    currentData = data;
+                    displayResults(data);
+                } else if (currentMode === 'precise') {
+                    displayPreciseResults(data, searchType);
+                } else if (currentMode === 'ticket') {
+                    displayTicketResults(data, searchType);
+                }
+                
             } catch (error) {
                 console.error('Error:', error);
-                results.innerHTML = `
-                    <div class="no-match">
-                        <p>אירעה שגיאה בעיבוד הפנייה. אנא נסה שנית.</p>
-                    </div>
-                `;
+                results.innerHTML = '<div class="error">שגיאה בחיפוש</div>';
                 results.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
-                form.querySelector('button').disabled = false;
+                searchBtn.disabled = false;
+                searchBtn.textContent = '🔍 חפש';
             }
         });
-
+        
+        // Result display functions
         function displayResults(data) {
             let html = '';
 
@@ -582,15 +822,402 @@
                 displayOfficialResponse(data.enhanced_response);
             }
         }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        
+        function displayPreciseResults(data, searchType) {
+            const INITIAL_SHOW = 10; // Show first 10 results
+            const matches = data.matches || [];
+            const totalMatches = matches.length;
+            
+            let html = `
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3>🚌 תוצאות חיפוש – ${searchType}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <p style="margin: 0; font-size: 18px; font-weight: bold; color: #2d3748;">
+                            נמצאו ${totalMatches} תוצאות
+                        </p>
+                        ${totalMatches > INITIAL_SHOW ? `
+                            <span style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                                מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            if (matches.length > 0) {
+                // Create results container with data attributes for pagination
+                html += '<div id="preciseResultsContainer">';
+                
+                matches.forEach((match, idx) => {
+                    const isHidden = idx >= INITIAL_SHOW;
+                    const caseId = match.case_id || `result-${idx}`;
+                    const date = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : '';
+                    
+                    html += `
+                        <div class="result-card precise-result" data-index="${idx}" style="
+                            margin-bottom: 15px; 
+                            padding: 15px; 
+                            background: white; 
+                            border-radius: 8px; 
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            border: 1px solid #e2e8f0;
+                            transition: all 0.3s ease;
+                            ${isHidden ? 'display: none;' : ''}
+                        " onmouseover="this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" 
+                           onmouseout="this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)'">
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <div>
+                                    <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        #${idx + 1}
+                                    </span>
+                                    ${caseId ? `
+                                        <span style="margin-right: 10px; color: #718096; font-size: 12px;">
+                                            ${caseId}
+                                        </span>
+                                    ` : ''}
+                                    ${date ? `
+                                        <span style="color: #718096; font-size: 12px;">
+                                            📅 ${date}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                    קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
+                                </span>
+                            </div>
+                            
+                            <div class="result-summary" style="margin-bottom: 10px;">
+                                <div style="background: #f0f4f8; padding: 8px 12px; border-radius: 6px; border-right: 3px solid #4299e1;">
+                                    <strong style="color: #2d3748;">תמצית:</strong>
+                                    <span style="color: #4a5568; font-size: 14px; line-height: 1.5;">
+                                        ${match.summary ? escapeHtml(match.summary) : 'אין תמצית זמינה'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 10px; display: flex; gap: 8px;">
+                                <button onclick="toggleFullQuestion(${idx})" style="
+                                    background: transparent;
+                                    color: #9f7aea;
+                                    border: 1px solid #9f7aea;
+                                    padding: 4px 12px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#9f7aea'; this.style.color='white';" 
+                                   onmouseout="this.style.background='transparent'; this.style.color='#9f7aea';">
+                                    הצג פנייה מלאה ↓
+                                </button>
+                                
+                                <button onclick="toggleFullResponse(${idx})" style="
+                                    background: transparent;
+                                    color: #4299e1;
+                                    border: 1px solid #4299e1;
+                                    padding: 4px 12px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#4299e1'; this.style.color='white';" 
+                                   onmouseout="this.style.background='transparent'; this.style.color='#4299e1';">
+                                    הצג תשובה מלאה ↓
+                                </button>
+                            </div>
+                            
+                            <div id="question-${idx}" style="display: none; margin-top: 10px; padding: 10px; background: #f3e8ff; border-radius: 4px;">
+                                <strong>פנייה מלאה:</strong>
+                                <div style="margin-top: 5px; color: #2d3748; line-height: 1.6;">
+                                    ${match.inquiry ? escapeHtml(match.inquiry) : 'אין פנייה זמינה'}
+                                </div>
+                            </div>
+                            
+                            <div id="response-${idx}" style="display: none; margin-top: 10px; padding: 10px; background: #e6fffa; border-radius: 4px;">
+                                <strong>תשובה:</strong>
+                                <div style="margin-top: 5px; color: #2d3748; line-height: 1.6;">
+                                    ${match.response ? escapeHtml(match.response) : 'אין תשובה זמינה'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                
+                // Add "Show More" button if there are more than INITIAL_SHOW results
+                if (totalMatches > INITIAL_SHOW) {
+                    html += `
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button id="showMoreBtn" onclick="showMorePreciseResults()" style="
+                                background: #4299e1;
+                                color: white;
+                                border: none;
+                                padding: 12px 32px;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+                            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(66, 153, 225, 0.4)';" 
+                               onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(66, 153, 225, 0.3)';">
+                                הצג עוד תוצאות (${totalMatches - INITIAL_SHOW} נוספות)
+                            </button>
+                        </div>
+                    `;
+                }
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 40px; background: white; border-radius: 8px;">
+                        <p style="font-size: 18px; color: #718096;">לא נמצאו תוצאות עבור קו ${searchType.split(': ')[1] || ''}</p>
+                        <p style="font-size: 14px; color: #a0aec0; margin-top: 10px;">נסה לחפש מספר קו אחר</p>
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+            results.style.display = 'block';
         }
-
-        let currentData = null;
-        let currentInquiry = '';
+        
+        // Helper function to toggle full response visibility
+        window.toggleFullResponse = function(index) {
+            const responseDiv = document.getElementById(`response-${index}`);
+            const button = event.target;
+            if (responseDiv.style.display === 'none') {
+                responseDiv.style.display = 'block';
+                button.textContent = 'הסתר תשובה ↑';
+            } else {
+                responseDiv.style.display = 'none';
+                button.textContent = 'הצג תשובה מלאה ↓';
+            }
+        }
+        
+        // Helper function to toggle full question visibility
+        window.toggleFullQuestion = function(index) {
+            const questionDiv = document.getElementById(`question-${index}`);
+            const button = event.target;
+            if (questionDiv.style.display === 'none') {
+                questionDiv.style.display = 'block';
+                button.textContent = 'הסתר פנייה ↑';
+            } else {
+                questionDiv.style.display = 'none';
+                button.textContent = 'הצג פנייה מלאה ↓';
+            }
+        }
+        
+        // Helper function to show more results
+        window.showMorePreciseResults = function() {
+            const hiddenResults = document.querySelectorAll('.precise-result[style*="display: none"]');
+            hiddenResults.forEach(result => {
+                result.style.display = 'block';
+            });
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                showMoreBtn.style.display = 'none';
+            }
+        }
+        
+        function displayTicketResults(data, searchType) {
+            let html = `
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3>📋 ציר זמן של פנייה – ${searchType}</h3>
+                    <p style="font-size: 18px; margin: 10px 0;">
+                        <strong>נמצאו ${data.total_entries || 0} רשומות</strong> 
+                        <span style="color: #718096; font-size: 14px;">(מסודר כרונולוגית)</span>
+                    </p>
+                </div>
+            `;
+            
+            if (data.entries && data.entries.length > 0) {
+                // First, show the original inquiry if exists
+                const firstEntry = data.entries[0];
+                if (firstEntry.inquiry) {
+                    html += `
+                        <div style="background: #e6f7ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #1890ff;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <h4 style="margin: 0; color: #1890ff;">📝 הפנייה המקורית</h4>
+                                <span style="font-size: 12px; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 4px;">
+                                    שורה ${firstEntry.row_number || 'לא ידוע'}
+                                </span>
+                            </div>
+                            ${firstEntry.summary ? `
+                                <div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                                    <strong>תמצית:</strong> ${escapeHtml(firstEntry.summary)}
+                                </div>
+                            ` : ''}
+                            <div style="background: white; padding: 10px; border-radius: 4px;">
+                                <strong>פנייה:</strong> ${escapeHtml(firstEntry.inquiry)}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Timeline header
+                html += `<div style="position: relative; padding-left: 30px;">`;
+                
+                // Show all entries with timeline
+                data.entries.forEach((entry, idx) => {
+                    const timestamp = entry.timestamp || 'ללא תאריך';
+                    const dateObj = timestamp !== 'ללא תאריך' && timestamp !== 'לא זמין' ? new Date(timestamp) : null;
+                    const formattedDate = dateObj ? dateObj.toLocaleDateString('he-IL') : timestamp;
+                    const formattedTime = dateObj ? dateObj.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+                    
+                    const isLast = idx === data.entries.length - 1;
+                    const hasResponse = entry.response && entry.response.trim();
+                    
+                    html += `
+                        <div class="timeline-entry" style="
+                            position: relative;
+                            margin-bottom: ${isLast ? '0' : '20px'}; 
+                            padding: 15px; 
+                            background: ${hasResponse ? '#f0fff4' : '#f7fafc'}; 
+                            border: 1px solid ${hasResponse ? '#9ae6b4' : '#e2e8f0'};
+                            border-radius: 8px;
+                            margin-left: 10px;
+                        ">
+                            <!-- Timeline dot and line -->
+                            <div style="
+                                position: absolute;
+                                left: -40px;
+                                top: 20px;
+                                width: 12px;
+                                height: 12px;
+                                background: ${isLast ? '#48bb78' : '#4299e1'};
+                                border-radius: 50%;
+                                border: 2px solid white;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            "></div>
+                            ${!isLast ? `
+                                <div style="
+                                    position: absolute;
+                                    left: -35px;
+                                    top: 35px;
+                                    width: 2px;
+                                    height: calc(100% + 20px);
+                                    background: #cbd5e0;
+                                "></div>
+                            ` : ''}
+                            
+                            <!-- Arrow indicator -->
+                            ${idx > 0 ? `
+                                <div style="
+                                    position: absolute;
+                                    left: -20px;
+                                    top: 15px;
+                                    font-size: 20px;
+                                    color: #4299e1;
+                                ">→</div>
+                            ` : ''}
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <div>
+                                    <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        ${idx + 1}. ${hasResponse ? 'תשובה' : 'עדכון'}
+                                    </span>
+                                    ${entry.author && entry.author !== 'לא זמין' ? `
+                                        <span style="margin-right: 10px; color: #718096; font-size: 12px;">
+                                            מאת: ${entry.author}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <div style="text-align: left;">
+                                    <div style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        ${formattedDate}
+                                    </div>
+                                    ${formattedTime ? `
+                                        <div style="color: #718096; font-size: 12px;">
+                                            ${formattedTime}
+                                        </div>
+                                    ` : ''}
+                                    <div style="font-size: 11px; color: #999; margin-top: 2px;">
+                                        שורה ${entry.row_number || 'לא ידוע'}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${hasResponse ? `
+                                <div style="background: white; padding: 12px; border-radius: 4px; color: #2d3748; line-height: 1.6;">
+                                    ${escapeHtml(entry.response)}
+                                </div>
+                            ` : `
+                                <div style="color: #718096; font-style: italic;">
+                                    ${escapeHtml(entry.content || 'אין תוכן זמין')}
+                                </div>
+                            `}
+                            
+                            ${isLast ? `
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                                    <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                        תשובה אחרונה
+                                    </span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += '</div>'; // Close timeline container
+                
+                html += `
+                    <div style="text-align: center; margin-top: 30px;">
+                        <button onclick="clearSearch()" style="
+                            background: transparent;
+                            color: #4299e1;
+                            border: 2px solid #4299e1;
+                            padding: 8px 16px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 14px;
+                        ">
+                            נקה חיפוש
+                        </button>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 40px;">
+                        <p>לא נמצאו רשומות עבור מזהה פנייה זה</p>
+                        <p style="font-size: 14px; color: #718096; margin-top: 10px;">
+                            ודא שמזהה הפנייה נכון וקיים במערכת
+                        </p>
+                        <button onclick="clearSearch()" style="
+                            background: #4299e1;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            margin-top: 15px;
+                        ">
+                            נקה חיפוש
+                        </button>
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+        
+        function clearSearch() {
+            inquiryInput.value = '';
+            results.style.display = 'none';
+            inquiryInput.focus();
+        }
+        
+        // Generate official response section for regular mode
+        function generateOfficialResponseSection(aiResponse) {
+            return `
+                <div class="ai-response" style="margin-top: 20px; padding: 20px; background: #f0f8ff; border-radius: 8px; border-left: 4px solid #4299e1;">
+                    <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                        <span style="font-size: 24px; margin-left: 10px;">🤖</span>
+                        <h3 style="margin: 0; color: #2d3748;">תשובה מבוססת AI</h3>
+                    </div>
+                    <div style="color: #4a5568; line-height: 1.8; white-space: pre-wrap;">${escapeHtml(aiResponse)}</div>
+                </div>
+            `;
+        }
 
         async function selectResponse(matchIndex) {
             if (!currentData || !currentData.related_matches || !currentData.related_matches[matchIndex]) {
@@ -620,7 +1247,7 @@
 
             try {
                 // First try the new endpoint
-                let response = await fetch('http://localhost:8009/generate-official-response', {
+                let response = await fetch('/generate-official-response', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -677,9 +1304,6 @@
                 buttons.forEach(btn => btn.disabled = false);
             }
         }
-
-        let currentOfficialResponse = '';
-        let isEditing = false;
 
         function displayOfficialResponse(response) {
             const existingOfficialResponse = document.querySelector('.official-response');
@@ -758,7 +1382,7 @@
             sendBtn.textContent = 'שולח... ⏳';
 
             try {
-                const response = await fetch('http://localhost:8009/append-to-sheet', {
+                const response = await fetch('/append-to-sheet', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json; charset=utf-8',
@@ -850,6 +1474,25 @@
             }
         }
 
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('שגיאה בניתוק מהמערכת');
+            }
+        }
+        
+        }); // End DOMContentLoaded
     </script>
 </body>
 </html>
