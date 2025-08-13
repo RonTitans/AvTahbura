@@ -51,15 +51,44 @@ app.get('/api/test-env', async (req, res) => {
     openaiStatus = `error: ${err.message}`;
   }
 
+  // Test Google Sheets authentication
+  let googleSheetsStatus = 'not tested';
+  let serviceAccountEmail = 'unknown';
+  try {
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+      const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+      serviceAccountEmail = creds.client_email || 'parse error';
+      
+      // Try to authenticate
+      const sheets = await authenticateGoogleSheets();
+      
+      // Try to read sheet info
+      const info = await sheets.spreadsheets.get({
+        spreadsheetId: process.env.SPREADSHEET_ID
+      });
+      
+      googleSheetsStatus = `connected to: ${info.data.properties.title}`;
+    } else {
+      googleSheetsStatus = 'no credentials';
+    }
+  } catch (err) {
+    googleSheetsStatus = `error: ${err.message}`;
+  }
+
   res.json({
     hasOpenAI: !!process.env.OPENAI_API_KEY,
     hasSpreadsheet: !!process.env.SPREADSHEET_ID,
+    spreadsheetId: process.env.SPREADSHEET_ID?.substring(0, 10) + '...',
     hasGoogleCreds: !!process.env.GOOGLE_CREDENTIALS_JSON,
+    googleCredsLength: process.env.GOOGLE_CREDENTIALS_JSON?.length,
+    serviceAccountEmail: serviceAccountEmail,
+    googleSheetsStatus: googleSheetsStatus,
     hasSessionSecret: !!process.env.SESSION_SECRET,
     hasAdminPassword: !!process.env.ADMIN_PASSWORD,
     adminPasswordLength: process.env.ADMIN_PASSWORD?.length,
     nodeEnv: process.env.NODE_ENV,
     dataLoaded: municipalData.length,
+    dataLoadedSuccessfully: dataLoadedSuccessfully,
     openaiStatus: openaiStatus
   });
 });
@@ -227,6 +256,20 @@ async function authenticateGoogleSheets(readOnly = true) {
 async function loadDataFromSheets() {
   try {
     console.log('🔄 Loading data from Google Sheets...');
+    console.log('📊 Spreadsheet ID:', process.env.SPREADSHEET_ID);
+    console.log('🔑 Has Google Credentials:', !!process.env.GOOGLE_CREDENTIALS_JSON);
+    console.log('🔑 Credentials Length:', process.env.GOOGLE_CREDENTIALS_JSON?.length);
+    
+    // Parse and log service account email if available
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+      try {
+        const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        console.log('📧 Service Account Email:', creds.client_email);
+      } catch (e) {
+        console.error('❌ Failed to parse GOOGLE_CREDENTIALS_JSON:', e.message);
+      }
+    }
+    
     dataLoadedSuccessfully = false;
     
     const sheets = await authenticateGoogleSheets();
