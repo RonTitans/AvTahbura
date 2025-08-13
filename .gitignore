@@ -68,3 +68,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+.vercel
+
+# Deployment helper files (contain secrets)
+google-creds-string.txt
+add-env-vars.sh

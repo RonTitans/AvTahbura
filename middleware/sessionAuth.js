@@ -27,35 +27,27 @@ function generateSessionId() {
 export async function loginHandler(req, res) {
   const { username, password } = req.body;
   
-  if (!username || !password) {
+  // For simplified login, we only check password
+  if (!password) {
     return res.status(400).json({ 
       success: false, 
-      error: 'שם משתמש וסיסמה נדרשים' 
+      error: 'סיסמה נדרשת' 
     });
   }
   
-  const adminUser = process.env.ADMIN_USER;
-  const adminPassHash = process.env.ADMIN_PASS_HASH;
+  const adminPassword = process.env.ADMIN_PASSWORD;
   
-  if (!adminUser || !adminPassHash) {
-    console.error('Admin credentials not configured');
+  if (!adminPassword) {
+    console.error('Admin password not configured');
     return res.status(500).json({ 
       success: false, 
       error: 'שגיאת תצורה בשרת' 
     });
   }
   
-  // Verify username
-  if (username !== adminUser) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'שם משתמש או סיסמה שגויים' 
-    });
-  }
-  
-  // Verify password
+  // Verify password directly (simplified for deployment)
   try {
-    const isValidPassword = await bcrypt.compare(password, adminPassHash);
+    const isValidPassword = password === adminPassword;
     
     if (!isValidPassword) {
       return res.status(401).json({ 

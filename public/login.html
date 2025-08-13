@@ -259,11 +259,10 @@
             // Prevent multiple submissions
             if (isSubmitting) return;
             
-            const username = usernameInput.value.trim();
             const password = passwordInput.value;
             
-            if (!username || !password) {
-                showError('יש למלא את כל השדות');
+            if (!password) {
+                showError('יש להזין סיסמה');
                 return;
             }
             
@@ -277,7 +276,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username: 'admin', password })
                 });
                 
                 const result = await response.json();

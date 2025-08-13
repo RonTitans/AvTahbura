@@ -12,27 +12,43 @@
   ],
   "routes": [
     {
-      "src": "/login.html",
-      "dest": "/public/login.html"
+      "src": "/(login\\.html|index\\.html|admin\\.html|integrations\\.html|auth-handler\\.js)",
+      "dest": "/public/$1"
     },
     {
-      "src": "/index.html",
-      "dest": "/public/index.html"
+      "src": "/api/(.*)",
+      "dest": "/server.js"
     },
     {
-      "src": "/admin.html",
-      "dest": "/public/admin.html"
+      "src": "/exact-search",
+      "dest": "/server.js"
     },
     {
-      "src": "/integrations.html",
-      "dest": "/public/integrations.html"
+      "src": "/search",
+      "dest": "/server.js"
     },
     {
-      "src": "/auth-handler.js",
-      "dest": "/public/auth-handler.js"
+      "src": "/search-by-line",
+      "dest": "/server.js"
     },
     {
-      "src": "/(.*)",
+      "src": "/search-by-ticket",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/generate-official-response",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/health",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/data-sample",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/",
       "dest": "/server.js"
     }
   ],

@@ -63,6 +63,11 @@ app.use((req, res, next) => {
 // Serve static files (including login.html) - this will handle login.html properly
 app.use(express.static('public'));
 
+// Root route - redirect to index.html
+app.get('/', (req, res) => {
+  res.redirect('/index.html');
+});
+
 // Mount integrations routes (now protected by session auth)
 app.use('/integrations', integrationsRouter);
 
