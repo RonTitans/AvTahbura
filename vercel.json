@@ -12,39 +12,11 @@
   ],
   "routes": [
     {
-      "src": "/(login\\.html|index\\.html|admin\\.html|integrations\\.html|auth-handler\\.js)",
+      "src": "/(.*\\.(html|js|css|png|jpg|jpeg|gif|svg|ico))$",
       "dest": "/public/$1"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/exact-search",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/search",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/search-by-line",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/search-by-ticket",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/generate-official-response",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/health",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/data-sample",
+      "src": "/(api|exact-search|search|search-by-line|search-by-ticket|generate-official-response|health|data-sample|append-to-sheet|test-google-sheets|integrations)(.*)",
       "dest": "/server.js"
     },
     {

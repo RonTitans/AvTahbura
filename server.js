@@ -43,6 +43,8 @@ app.get('/api/test-env', (req, res) => {
     hasSessionSecret: !!process.env.SESSION_SECRET,
     hasAdminPassword: !!process.env.ADMIN_PASSWORD,
     adminPasswordLength: process.env.ADMIN_PASSWORD?.length,
+    adminPasswordFirstChar: process.env.ADMIN_PASSWORD?.[0],
+    adminPasswordLastChar: process.env.ADMIN_PASSWORD?.slice(-1),
     nodeEnv: process.env.NODE_ENV
   });
 });

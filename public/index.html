@@ -11,14 +11,23 @@
             box-sizing: border-box;
         }
 
+        /* Prevent flash of unstyled content */
+        html {
+            visibility: visible;
+            opacity: 1;
+            background: #f5f7fa;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: #f5f7fa;
+            background-attachment: fixed;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            color: #333;
         }
 
         .container {
@@ -688,10 +697,9 @@
                 let endpoint, requestBody, searchType;
                 
                 if (currentMode === 'regular') {
-                    endpoint = '/recommend';
+                    endpoint = '/exact-search';
                     requestBody = {
-                        inquiry_text: input,
-                        max_recommendations: 5
+                        inquiry_text: input
                     };
                     searchType = 'רגיל';
                 } else if (currentMode === 'precise') {
