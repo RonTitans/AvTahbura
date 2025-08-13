@@ -34,8 +34,23 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
-// Test endpoint to check environment variables
-app.get('/api/test-env', (req, res) => {
+// Test endpoint to check environment variables and connections
+app.get('/api/test-env', async (req, res) => {
+  // Test OpenAI connection
+  let openaiStatus = 'not tested';
+  try {
+    if (openai) {
+      const testCompletion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: "Say 'OK'" }],
+        max_tokens: 5
+      });
+      openaiStatus = testCompletion.choices[0]?.message?.content ? 'working' : 'error';
+    }
+  } catch (err) {
+    openaiStatus = `error: ${err.message}`;
+  }
+
   res.json({
     hasOpenAI: !!process.env.OPENAI_API_KEY,
     hasSpreadsheet: !!process.env.SPREADSHEET_ID,
@@ -43,9 +58,9 @@ app.get('/api/test-env', (req, res) => {
     hasSessionSecret: !!process.env.SESSION_SECRET,
     hasAdminPassword: !!process.env.ADMIN_PASSWORD,
     adminPasswordLength: process.env.ADMIN_PASSWORD?.length,
-    adminPasswordFirstChar: process.env.ADMIN_PASSWORD?.[0],
-    adminPasswordLastChar: process.env.ADMIN_PASSWORD?.slice(-1),
-    nodeEnv: process.env.NODE_ENV
+    nodeEnv: process.env.NODE_ENV,
+    dataLoaded: municipalData.length,
+    openaiStatus: openaiStatus
   });
 });
 
