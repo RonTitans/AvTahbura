@@ -1128,7 +1128,8 @@ app.post('/recommend', async (req, res) => {
 // NEW: Exact phrase search endpoint (added for demo - does NOT change existing functionality)
 app.post('/exact-search', async (req, res) => {
   try {
-    const { searchPhrase } = req.body;
+    // Support both searchPhrase and inquiry_text for compatibility
+    const searchPhrase = req.body.searchPhrase || req.body.inquiry_text;
     
     if (!searchPhrase || searchPhrase.trim().length === 0) {
       return res.status(400).json({ 
