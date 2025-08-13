@@ -58,11 +58,12 @@ app.get('/api/session-info', getSessionInfo);
 app.use((req, res, next) => {
   // Skip auth for login page, auth APIs, exact search, and static assets
   if (req.path === '/login.html' || 
-      req.path.startsWith('/api/login') || 
-      req.path.startsWith('/api/logout') ||
-      req.path.startsWith('/api/session-info') ||
-      req.path.startsWith('/api/test-env') ||
+      req.path.startsWith('/api/') ||
+      req.path === '/health' ||
+      req.path === '/data-sample' ||
       req.path === '/exact-search' ||
+      req.path === '/search-by-line' ||
+      req.path === '/search-by-ticket' ||
       req.path.endsWith('.css') || 
       req.path.endsWith('.js') || 
       req.path.endsWith('.ico') ||
