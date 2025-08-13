@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/login.html",
+      "dest": "/public/login.html"
+    },
+    {
+      "src": "/index.html",
+      "dest": "/public/index.html"
+    },
+    {
+      "src": "/admin.html",
+      "dest": "/public/admin.html"
+    },
+    {
+      "src": "/integrations.html",
+      "dest": "/public/integrations.html"
+    },
+    {
+      "src": "/auth-handler.js",
+      "dest": "/public/auth-handler.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/server.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
