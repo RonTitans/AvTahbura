@@ -19,7 +19,7 @@ import integrationsRouter from './routes/integrations.js';
 import { loadConfig } from './utils/encryption.js';
 import cookieParser from 'cookie-parser';
 import { loginHandler, logoutHandler, requireAuth, getSessionInfo } from './middleware/sessionAuth.js';
-import { debugEndpointHandler } from './debug-vercel-env.js';
+// import { debugEndpointHandler } from './debug-vercel-env.js';
 
 // Load environment variables
 dotenv.config();
@@ -36,7 +36,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Comprehensive debug endpoint for environment variables and connections
-app.get('/api/debug-vercel', debugEndpointHandler);
+// app.get('/api/debug-vercel', debugEndpointHandler);
 
 // Test endpoint to check environment variables and connections
 app.get('/api/test-env', async (req, res) => {
