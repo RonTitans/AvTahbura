@@ -34,6 +34,19 @@ router.get('/mode', (req, res) => {
     });
 });
 
+// Debug endpoint to check environment variables
+router.get('/debug-env', (req, res) => {
+    res.json({
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+        useSupabaseAuth: process.env.USE_SUPABASE_AUTH,
+        require2FA: process.env.REQUIRE_2FA,
+        supabaseClientCreated: !!supabase,
+        supabaseUrlPrefix: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) : 'NOT SET',
+        nodeEnv: process.env.NODE_ENV
+    });
+});
+
 // Enhanced login
 router.post('/login', async (req, res) => {
     const { email, password, useSupabase } = req.body;
@@ -41,6 +54,19 @@ router.post('/login', async (req, res) => {
     console.log('🔐 Auth login attempt:', { email, useSupabase, envSupabase: process.env.USE_SUPABASE_AUTH });
     
     try {
+        // Check if Supabase is not initialized properly
+        if ((useSupabase || process.env.USE_SUPABASE_AUTH === 'true') && !supabase) {
+            console.error('❌ Supabase client not initialized');
+            return res.status(500).json({
+                success: false,
+                error: 'Authentication service not configured. Please check environment variables.',
+                debug: {
+                    hasUrl: !!process.env.SUPABASE_URL,
+                    hasKey: !!process.env.SUPABASE_ANON_KEY
+                }
+            });
+        }
+        
         // Check if we should use Supabase
         if ((useSupabase || process.env.USE_SUPABASE_AUTH === 'true') && supabase) {
             console.log('🔑 Using Supabase authentication');
