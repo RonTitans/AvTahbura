@@ -77,6 +77,86 @@ router.get('/test-connection', async (req, res) => {
     }
 });
 
+// Test login with specific user
+router.post('/test-login', async (req, res) => {
+    if (!supabase) {
+        return res.status(500).json({
+            success: false,
+            error: 'Supabase client not initialized'
+        });
+    }
+    
+    try {
+        // Try to sign in with the test user
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: 'ron@titans.global',
+            password: 'SecurePass123!@#'
+        });
+        
+        if (error) {
+            // If user doesn't exist, try to create it
+            if (error.message.includes('Invalid login credentials')) {
+                console.log('User not found, attempting to create...');
+                
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                    email: 'ron@titans.global',
+                    password: 'SecurePass123!@#',
+                    options: {
+                        data: {
+                            full_name: 'Ron Geller',
+                            role: 'admin'
+                        }
+                    }
+                });
+                
+                if (signUpError) {
+                    return res.json({
+                        success: false,
+                        action: 'signup_failed',
+                        error: signUpError.message,
+                        details: signUpError
+                    });
+                }
+                
+                return res.json({
+                    success: true,
+                    action: 'user_created',
+                    message: 'User created successfully. Please check your email for confirmation.',
+                    userId: signUpData.user?.id,
+                    needsEmailConfirmation: !signUpData.user?.confirmed_at
+                });
+            }
+            
+            return res.json({
+                success: false,
+                action: 'login_failed',
+                error: error.message,
+                code: error.code,
+                status: error.status
+            });
+        }
+        
+        res.json({
+            success: true,
+            action: 'login_success',
+            userId: data.user?.id,
+            email: data.user?.email,
+            emailConfirmed: !!data.user?.confirmed_at,
+            has2FA: !!data.user?.user_metadata?.twofa_secret
+        });
+        
+        // Sign out after test
+        await supabase.auth.signOut();
+        
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            stack: err.stack
+        });
+    }
+});
+
 // Enhanced login
 router.post('/login', async (req, res) => {
     const { email, password, useSupabase } = req.body;
