@@ -118,9 +118,8 @@ export function requireAuth(req, res, next) {
 
 // Redirect to login helper
 function redirectToLogin(req, res) {
-  // Determine which login page to use based on auth mode
-  const useSupabase = process.env.USE_SUPABASE_AUTH === 'true';
-  const loginPage = useSupabase ? '/login-new.html' : '/login.html';
+  // Use clean URL for login
+  const loginPage = '/login';
   
   // For API requests, return JSON
   if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/')) {
@@ -131,7 +130,7 @@ function redirectToLogin(req, res) {
     });
   }
   
-  // For page requests, redirect to appropriate login page
+  // For page requests, redirect to clean login URL
   res.redirect(loginPage);
 }
 

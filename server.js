@@ -152,7 +152,8 @@ app.use('/api/auth', authSupabaseRouter);
 // Apply authentication middleware with proper exclusions
 app.use((req, res, next) => {
   // Skip auth for login pages, auth APIs, exact search, and static assets
-  if (req.path === '/login.html' || 
+  if (req.path === '/login' ||
+      req.path === '/login.html' || 
       req.path === '/login-new.html' ||
       req.path.startsWith('/api/') ||
       req.path === '/health' ||
@@ -174,12 +175,25 @@ app.use((req, res, next) => {
   requireAuth(req, res, next);
 });
 
-// Serve static files (including login.html) - this will handle login.html properly
+// Clean URL routes - serve HTML files without extensions
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login-new.html'));
+});
+
+app.get('/app', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/integrations', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'integrations.html'));
+});
+
+// Serve static files (CSS, JS, images, etc.)
 app.use(express.static('public'));
 
-// Root route - redirect to index.html
-app.get('/', (req, res) => {
-  res.redirect('/index.html');
+// Root route - redirect to app
+app.get('/', requireAuth, (req, res) => {
+  res.redirect('/app');
 });
 
 // Mount integrations routes (now protected by session auth)
