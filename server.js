@@ -562,23 +562,56 @@ async function loadDataFromSheets() {
     console.error('❌ Error loading data from Google Sheets:', error);
     dataLoadedSuccessfully = false;
     
-    // Load fallback test data
+    // Load fallback test data with more entries for better testing
     console.log('🔄 Loading fallback test data...');
     municipalData = [
       {
         case_id: 'CAS-BEIT-SHEMESH-1',
         inquiry_text: 'הוספת קו חדש בית שמש - בית שמש הוספת קו חדש הערות הפונה: אני גרה ברמת אברהם בבית שמש ועובדת ברמה ג\'2 בבית שמש ונאלצת לסע ב2 אוטובוסים לעבודה',
-        response_text: 'שלום רב, מסלולי הקווים באזור זה מאזנים בין הצרכים השונים, במטרה לאפשר שירות תחבורה ציבורית יעיל ומיטבי. אנו בוחנים את הבקשה לקו ישיר. בברכה'
+        response_text: 'שלום רב, מסלולי הקווים באזור זה מאזנים בין הצרכים השונים, במטרה לאפשר שירות תחבורה ציבורית יעיל ומיטבי. אנו בוחנים את הבקשה לקו ישיר. בברכה',
+        has_official_response: true
       },
       {
         case_id: 'CAS-LINE-408-1',
         inquiry_text: 'קו 408 שינוי מסלול בית שמש',
-        response_text: 'שלום רב, פנייתך בנושא שינוי מסלול קו 408 לבית שמש התקבלה. אנו בוחנים את הבקשה וננקטו הפעולות הנדרשות. בברכה'
+        response_text: 'שלום רב, פנייתך בנושא שינוי מסלול קו 408 לבית שמש התקבלה. אנו בוחנים את הבקשה וננקטו הפעולות הנדרשות. בברכה',
+        has_official_response: true
       },
       {
         case_id: 'CAS-FREQUENCY-1',
         inquiry_text: 'הוספת תדירות בנסיעת קו 426',
-        response_text: 'שלום רב, פנייתך בנושא הוספת תדירות קו 426 התקבלה. אנו בוחנים את הבקשה ונעדכן בהמשך. בברכה'
+        response_text: 'שלום רב, פנייתך בנושא הוספת תדירות קו 426 התקבלה. אנו בוחנים את הבקשה ונעדכן בהמשך. בברכה',
+        has_official_response: true
+      },
+      {
+        case_id: 'CAS-JERUSALEM-1',
+        inquiry_text: 'בקשה להוספת תחנה בקו 74 ליד בית החולים הדסה עין כרם',
+        response_text: 'שלום רב, פנייתך בנושא הוספת תחנה בקו 74 התקבלה. הנושא יועבר לבדיקת צוות התכנון. בברכה',
+        has_official_response: true
+      },
+      {
+        case_id: 'CAS-LINE-15-1',
+        inquiry_text: 'קו 15 - תלונה על אי עמידה בלוחות זמנים',
+        response_text: 'שלום רב, אנו מתנצלים על אי הנוחות. הנושא הועבר למפעיל הקו לטיפול. בברכה',
+        has_official_response: true
+      },
+      {
+        case_id: 'CAS-NIGHT-SERVICE-1',
+        inquiry_text: 'בקשה לשירות לילה מהתחנה המרכזית לרמות',
+        response_text: 'שלום רב, בקשתך לשירות לילה נבחנת במסגרת תוכנית האב לתחבורה. נעדכן בהמשך. בברכה',
+        has_official_response: true
+      },
+      {
+        case_id: 'CAS-LINE-32-1',
+        inquiry_text: 'קו 32 - בקשה להגברת תדירות בשעות הבוקר',
+        response_text: 'שלום רב, פנייתך בנושא תדירות קו 32 התקבלה. הנושא יבחן במסגרת עדכון מערך הקווים הרבעוני. בברכה',
+        has_official_response: true
+      },
+      {
+        case_id: 'CAS-ACCESSIBILITY-1',
+        inquiry_text: 'חוסר נגישות בתחנה ברחוב יפו 23',
+        response_text: 'שלום רב, תודה על הפנייה. נושא הנגישות חשוב לנו והועבר לטיפול האגף הרלוונטי. בברכה',
+        has_official_response: true
       }
     ];
     
