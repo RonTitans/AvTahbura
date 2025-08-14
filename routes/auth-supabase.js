@@ -36,9 +36,15 @@ router.get('/mode', (req, res) => {
 
 // Debug endpoint to check environment variables
 router.get('/debug-env', (req, res) => {
+    const keyPreview = process.env.SUPABASE_ANON_KEY ? 
+        `${process.env.SUPABASE_ANON_KEY.substring(0, 50)}...${process.env.SUPABASE_ANON_KEY.slice(-20)}` : 
+        'NOT SET';
+    
     res.json({
         hasSupabaseUrl: !!process.env.SUPABASE_URL,
         hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+        keyPreview: keyPreview,
+        keyLength: process.env.SUPABASE_ANON_KEY?.length,
         useSupabaseAuth: process.env.USE_SUPABASE_AUTH,
         require2FA: process.env.REQUIRE_2FA,
         supabaseClientCreated: !!supabase,
