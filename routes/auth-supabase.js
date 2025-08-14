@@ -47,6 +47,36 @@ router.get('/debug-env', (req, res) => {
     });
 });
 
+// Test Supabase connection
+router.get('/test-connection', async (req, res) => {
+    if (!supabase) {
+        return res.status(500).json({
+            success: false,
+            error: 'Supabase client not initialized'
+        });
+    }
+    
+    try {
+        // Try to get the current session (should be null if not logged in)
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        res.json({
+            success: true,
+            connectionOk: !error,
+            hasSession: !!session,
+            error: error?.message,
+            supabaseUrl: process.env.SUPABASE_URL?.substring(0, 30) + '...',
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            stack: err.stack
+        });
+    }
+});
+
 // Enhanced login
 router.post('/login', async (req, res) => {
     const { email, password, useSupabase } = req.body;
@@ -77,10 +107,29 @@ router.post('/login', async (req, res) => {
             });
             
             if (error) {
-                console.error('❌ Supabase login error:', error);
+                console.error('❌ Supabase login error:', {
+                    message: error.message,
+                    status: error.status,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                    email: email
+                });
+                
+                // More specific error messages
+                let errorMessage = error.message;
+                if (error.message.includes('Invalid API key')) {
+                    errorMessage = 'Authentication service configuration error. Please contact support.';
+                } else if (error.message.includes('Invalid login credentials')) {
+                    errorMessage = 'Invalid email or password';
+                } else if (error.message.includes('Email not confirmed')) {
+                    errorMessage = 'Please confirm your email address first';
+                }
+                
                 return res.status(401).json({
                     success: false,
-                    error: error.message
+                    error: errorMessage,
+                    errorCode: error.code
                 });
             }
             
