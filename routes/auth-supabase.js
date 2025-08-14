@@ -77,6 +77,36 @@ router.get('/test-connection', async (req, res) => {
     }
 });
 
+// Check user status (GET endpoint for easy testing)
+router.get('/check-user', async (req, res) => {
+    if (!supabase) {
+        return res.status(500).json({
+            success: false,
+            error: 'Supabase client not initialized'
+        });
+    }
+    
+    res.json({
+        success: true,
+        message: 'To test login, use the browser console with:',
+        instructions: `
+fetch('/api/auth/login', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    email: 'ron@titans.global',
+    password: 'SecurePass123!@#',
+    useSupabase: true
+  })
+}).then(r => r.json()).then(console.log)`,
+        supabaseConnected: true,
+        authMode: {
+            useSupabase: process.env.USE_SUPABASE_AUTH === 'true',
+            require2FA: process.env.REQUIRE_2FA === 'true'
+        }
+    });
+});
+
 // Test login with specific user
 router.post('/test-login', async (req, res) => {
     if (!supabase) {
