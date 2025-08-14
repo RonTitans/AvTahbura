@@ -697,9 +697,10 @@
                 let endpoint, requestBody, searchType;
                 
                 if (currentMode === 'regular') {
-                    endpoint = '/exact-search';
+                    endpoint = '/recommend';
                     requestBody = {
-                        inquiry_text: input
+                        inquiry_text: input,
+                        max_recommendations: 5
                     };
                     searchType = 'רגיל';
                 } else if (currentMode === 'precise') {

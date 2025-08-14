@@ -442,10 +442,17 @@ async function loadDataFromSheets() {
     console.log('🔑 Credentials Length:', process.env.GOOGLE_CREDENTIALS_JSON?.length);
     
     // Check if required environment variables are missing
-    if (!process.env.SPREADSHEET_ID || !process.env.GOOGLE_CREDENTIALS_JSON) {
+    const hasCredentials = process.env.GOOGLE_CREDENTIALS_JSON || 
+                          (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS));
+    
+    if (!process.env.SPREADSHEET_ID || !hasCredentials) {
       console.warn('⚠️ Missing required environment variables for Google Sheets');
       console.warn('⚠️ SPREADSHEET_ID:', !!process.env.SPREADSHEET_ID);
       console.warn('⚠️ GOOGLE_CREDENTIALS_JSON:', !!process.env.GOOGLE_CREDENTIALS_JSON);
+      console.warn('⚠️ GOOGLE_APPLICATION_CREDENTIALS:', !!process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        console.warn('⚠️ Credentials file exists:', fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS));
+      }
       console.warn('⚠️ Using fallback test data instead');
       throw new Error('Missing Google Sheets configuration');
     }
