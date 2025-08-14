@@ -1158,8 +1158,10 @@ app.post('/exact-search', async (req, res) => {
     const searchLower = searchPhrase.toLowerCase();
     
     municipalData.forEach((entry) => {
-      // For regular/exact search, only use entries with official responses
-      if (!entry.has_official_response) return;
+      // For regular/exact search, check if entry has content
+      // Temporarily disabled official response check for debugging
+      // if (!entry.has_official_response) return;
+      if (!entry.inquiry_text && !entry.response_text) return;
       
       // Search in both inquiry and response using correct field names
       const inquiryLower = (entry.inquiry_text || '').toLowerCase();
