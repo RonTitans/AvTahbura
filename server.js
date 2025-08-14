@@ -1456,6 +1456,52 @@ app.get('/debug-data', (req, res) => {
   });
 });
 
+// Debug OpenAI connection endpoint
+app.get('/api/debug/openai', async (req, res) => {
+  try {
+    const hasApiKey = !!process.env.OPENAI_API_KEY;
+    const keyLength = process.env.OPENAI_API_KEY?.length;
+    const keyPreview = process.env.OPENAI_API_KEY ? 
+      `${process.env.OPENAI_API_KEY.substring(0, 20)}...${process.env.OPENAI_API_KEY.slice(-10)}` : 
+      'NOT SET';
+    
+    let testResult = { success: false, error: null, model: null };
+    
+    if (openai && openaiAvailable) {
+      try {
+        // Try a simple API call to test the connection
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: 'Say "OK" if you are working' }],
+          max_tokens: 10
+        });
+        
+        testResult.success = true;
+        testResult.model = completion.model;
+        testResult.response = completion.choices[0]?.message?.content;
+      } catch (error) {
+        testResult.error = error.message;
+        testResult.errorCode = error.code;
+        testResult.errorType = error.type;
+      }
+    }
+    
+    res.json({
+      hasApiKey,
+      keyLength,
+      keyPreview,
+      openaiAvailable,
+      openaiInitialized: !!openai,
+      testResult
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Debug Google Sheets connection endpoint
 app.get('/api/debug/sheets', async (req, res) => {
   try {
