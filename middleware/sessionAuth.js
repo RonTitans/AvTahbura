@@ -1,27 +1,5 @@
 import bcrypt from 'bcrypt';
-
-// Simple in-memory session store (in production, use Redis or database)
-const sessions = new Map();
-
-// Session duration: 4 hours
-const SESSION_DURATION = 4 * 60 * 60 * 1000;
-
-// Clean expired sessions every 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [sessionId, session] of sessions.entries()) {
-    if (now - session.createdAt > SESSION_DURATION) {
-      sessions.delete(sessionId);
-    }
-  }
-}, 30 * 60 * 1000);
-
-// Generate secure session ID
-function generateSessionId() {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15) +
-         Date.now().toString(36);
-}
+import { sessions, generateSessionId, SESSION_DURATION } from './sessionStore.js';
 
 // Login endpoint
 export async function loginHandler(req, res) {
@@ -140,17 +118,21 @@ export function requireAuth(req, res, next) {
 
 // Redirect to login helper
 function redirectToLogin(req, res) {
+  // Determine which login page to use based on auth mode
+  const useSupabase = process.env.USE_SUPABASE_AUTH === 'true';
+  const loginPage = useSupabase ? '/login-new.html' : '/login.html';
+  
   // For API requests, return JSON
   if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/')) {
     return res.status(401).json({ 
       success: false, 
       error: 'נדרשת התחברות',
-      redirect: '/login.html'
+      redirect: loginPage
     });
   }
   
-  // For page requests, redirect to login
-  res.redirect('/login.html');
+  // For page requests, redirect to appropriate login page
+  res.redirect(loginPage);
 }
 
 // Get session info

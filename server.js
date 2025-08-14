@@ -16,6 +16,7 @@ import {
   initializeGPTImprovements
 } from './gpt-improvements.js';
 import integrationsRouter from './routes/integrations.js';
+import authSupabaseRouter from './routes/auth-supabase.js';
 import { loadConfig } from './utils/encryption.js';
 import cookieParser from 'cookie-parser';
 import { loginHandler, logoutHandler, requireAuth, getSessionInfo } from './middleware/sessionAuth.js';
@@ -145,10 +146,14 @@ app.post('/api/login', loginHandler);
 app.post('/api/logout', logoutHandler);
 app.get('/api/session-info', getSessionInfo);
 
+// Mount new Supabase auth routes
+app.use('/api/auth', authSupabaseRouter);
+
 // Apply authentication middleware with proper exclusions
 app.use((req, res, next) => {
-  // Skip auth for login page, auth APIs, exact search, and static assets
+  // Skip auth for login pages, auth APIs, exact search, and static assets
   if (req.path === '/login.html' || 
+      req.path === '/login-new.html' ||
       req.path.startsWith('/api/') ||
       req.path === '/health' ||
       req.path === '/data-sample' ||
