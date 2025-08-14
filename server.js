@@ -1144,13 +1144,6 @@ app.post('/exact-search', async (req, res) => {
     // Support both searchPhrase and inquiry_text for compatibility
     const searchPhrase = req.body.searchPhrase || req.body.inquiry_text;
     
-    console.log('🔍 Exact search request received:', { 
-      body: req.body,
-      searchPhrase,
-      dataLoaded: dataLoadedSuccessfully,
-      recordCount: municipalData.length 
-    });
-    
     if (!searchPhrase || searchPhrase.trim().length === 0) {
       return res.status(400).json({ 
         error: 'Search phrase is required',
@@ -1159,35 +1152,14 @@ app.post('/exact-search', async (req, res) => {
     }
 
     console.log(`\n🔍 Exact phrase search for: "${searchPhrase}"`);
-    console.log(`📊 Searching through ${municipalData.length} records`);
-    
-    // If no data is loaded, return appropriate message
-    if (!municipalData || municipalData.length === 0) {
-      console.error('❌ No data available to search');
-      return res.json({
-        success: false,
-        search_phrase: searchPhrase,
-        total_matches: 0,
-        matches: [],
-        error: 'No data available. Please try again later.',
-        search_type: 'exact_phrase'
-      });
-    }
     
     // Search for exact phrase in all entries
     const matches = [];
     const searchLower = searchPhrase.toLowerCase();
-    let entriesChecked = 0;
-    let entriesSkipped = 0;
     
     municipalData.forEach((entry) => {
       // For regular/exact search, only use entries with official responses
-      if (!entry.has_official_response) {
-        entriesSkipped++;
-        return;
-      }
-      
-      entriesChecked++;
+      if (!entry.has_official_response) return;
       
       // Search in both inquiry and response using correct field names
       const inquiryLower = (entry.inquiry_text || '').toLowerCase();
@@ -1218,7 +1190,6 @@ app.post('/exact-search', async (req, res) => {
     matches.sort((a, b) => b.occurrences.total - a.occurrences.total);
     
     console.log(`✅ Found ${matches.length} exact matches for "${searchPhrase}"`);
-    console.log(`📊 Entries checked: ${entriesChecked}, skipped: ${entriesSkipped}`);
     
     res.json({
       success: true,
