@@ -578,6 +578,7 @@
             const modeTip = document.getElementById('modeTip');
         
         let currentMode = 'regular';
+        // Global variables
         let currentInquiry = '';
         let currentOfficialResponse = '';
         let isEditing = false;
@@ -1500,6 +1501,13 @@
                 alert('שגיאה בניתוק מהמערכת');
             }
         }
+        
+        // Make functions globally accessible for onclick handlers
+        window.selectResponse = selectResponse;
+        window.toggleEditMode = toggleEditMode;
+        window.copyToClipboard = copyToClipboard;
+        window.sendToGoogleSheet = sendToGoogleSheet;
+        window.logout = logout;
         
         }); // End DOMContentLoaded
     </script>
