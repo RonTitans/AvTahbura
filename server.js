@@ -1456,6 +1456,65 @@ app.get('/debug-data', (req, res) => {
   });
 });
 
+// Debug Google Sheets connection endpoint
+app.get('/api/debug/sheets', async (req, res) => {
+  try {
+    const hasSpreadsheetId = !!process.env.SPREADSHEET_ID;
+    const hasGoogleCreds = !!process.env.GOOGLE_CREDENTIALS_JSON;
+    const googleCredsLength = process.env.GOOGLE_CREDENTIALS_JSON?.length;
+    
+    let authTest = { success: false, error: null, email: null };
+    
+    // Try to parse and validate Google credentials
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+      try {
+        const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        authTest.email = creds.client_email;
+        authTest.hasPrivateKey = !!creds.private_key;
+        authTest.projectId = creds.project_id;
+        
+        // Try to create auth and sheets client
+        const auth = new google.auth.GoogleAuth({
+          credentials: creds,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        });
+        
+        const sheets = google.sheets({ version: 'v4', auth });
+        
+        // Try to get spreadsheet info
+        if (process.env.SPREADSHEET_ID) {
+          const info = await sheets.spreadsheets.get({
+            spreadsheetId: process.env.SPREADSHEET_ID
+          });
+          authTest.success = true;
+          authTest.spreadsheetTitle = info.data.properties.title;
+          authTest.sheetsCount = info.data.sheets.length;
+        }
+      } catch (error) {
+        authTest.error = error.message;
+      }
+    }
+    
+    res.json({
+      hasSpreadsheetId,
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      hasGoogleCreds,
+      googleCredsLength,
+      authTest,
+      dataStatus: {
+        recordsLoaded: municipalData.length,
+        lastRefresh: lastRefreshTime,
+        dataLoadedSuccessfully
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Data sample endpoint
 app.get('/data-sample', (req, res) => {
   const sample = municipalData.slice(0, 5).map(entry => ({
