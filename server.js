@@ -441,6 +441,15 @@ async function loadDataFromSheets() {
     console.log('🔑 Has Google Credentials:', !!process.env.GOOGLE_CREDENTIALS_JSON);
     console.log('🔑 Credentials Length:', process.env.GOOGLE_CREDENTIALS_JSON?.length);
     
+    // Check if required environment variables are missing
+    if (!process.env.SPREADSHEET_ID || !process.env.GOOGLE_CREDENTIALS_JSON) {
+      console.warn('⚠️ Missing required environment variables for Google Sheets');
+      console.warn('⚠️ SPREADSHEET_ID:', !!process.env.SPREADSHEET_ID);
+      console.warn('⚠️ GOOGLE_CREDENTIALS_JSON:', !!process.env.GOOGLE_CREDENTIALS_JSON);
+      console.warn('⚠️ Using fallback test data instead');
+      throw new Error('Missing Google Sheets configuration');
+    }
+    
     // Parse and log service account email if available
     if (process.env.GOOGLE_CREDENTIALS_JSON) {
       try {
@@ -448,6 +457,8 @@ async function loadDataFromSheets() {
         console.log('📧 Service Account Email:', creds.client_email);
       } catch (e) {
         console.error('❌ Failed to parse GOOGLE_CREDENTIALS_JSON:', e.message);
+        console.error('❌ Make sure the JSON is properly formatted as a single-line string');
+        throw new Error('Invalid Google credentials format');
       }
     }
     
@@ -1133,6 +1144,13 @@ app.post('/exact-search', async (req, res) => {
     // Support both searchPhrase and inquiry_text for compatibility
     const searchPhrase = req.body.searchPhrase || req.body.inquiry_text;
     
+    console.log('🔍 Exact search request received:', { 
+      body: req.body,
+      searchPhrase,
+      dataLoaded: dataLoadedSuccessfully,
+      recordCount: municipalData.length 
+    });
+    
     if (!searchPhrase || searchPhrase.trim().length === 0) {
       return res.status(400).json({ 
         error: 'Search phrase is required',
@@ -1141,14 +1159,35 @@ app.post('/exact-search', async (req, res) => {
     }
 
     console.log(`\n🔍 Exact phrase search for: "${searchPhrase}"`);
+    console.log(`📊 Searching through ${municipalData.length} records`);
+    
+    // If no data is loaded, return appropriate message
+    if (!municipalData || municipalData.length === 0) {
+      console.error('❌ No data available to search');
+      return res.json({
+        success: false,
+        search_phrase: searchPhrase,
+        total_matches: 0,
+        matches: [],
+        error: 'No data available. Please try again later.',
+        search_type: 'exact_phrase'
+      });
+    }
     
     // Search for exact phrase in all entries
     const matches = [];
     const searchLower = searchPhrase.toLowerCase();
+    let entriesChecked = 0;
+    let entriesSkipped = 0;
     
     municipalData.forEach((entry) => {
       // For regular/exact search, only use entries with official responses
-      if (!entry.has_official_response) return;
+      if (!entry.has_official_response) {
+        entriesSkipped++;
+        return;
+      }
+      
+      entriesChecked++;
       
       // Search in both inquiry and response using correct field names
       const inquiryLower = (entry.inquiry_text || '').toLowerCase();
@@ -1179,6 +1218,7 @@ app.post('/exact-search', async (req, res) => {
     matches.sort((a, b) => b.occurrences.total - a.occurrences.total);
     
     console.log(`✅ Found ${matches.length} exact matches for "${searchPhrase}"`);
+    console.log(`📊 Entries checked: ${entriesChecked}, skipped: ${entriesSkipped}`);
     
     res.json({
       success: true,
@@ -1375,6 +1415,26 @@ app.get('/health', (req, res) => {
     search_type: embeddingsReady ? 'semantic_embeddings' : 'text_similarity',
     gpt_cache_size: responseCache.cache.size,
     active_sessions: sessions.size
+  });
+});
+
+// Diagnostic endpoint to check data status on Vercel
+app.get('/debug-data', (req, res) => {
+  const withOfficialResponse = municipalData.filter(e => e.has_official_response).length;
+  const withoutOfficialResponse = municipalData.filter(e => !e.has_official_response).length;
+  
+  res.json({
+    total_records: municipalData.length,
+    data_loaded_successfully: dataLoadedSuccessfully,
+    entries_with_official_response: withOfficialResponse,
+    entries_without_official_response: withoutOfficialResponse,
+    sample_entries: municipalData.slice(0, 3).map(entry => ({
+      case_id: entry.case_id,
+      has_official_response: entry.has_official_response,
+      inquiry_preview: entry.inquiry_text ? entry.inquiry_text.substring(0, 30) : 'N/A',
+      response_preview: entry.response_text ? entry.response_text.substring(0, 30) : 'N/A'
+    })),
+    official_keywords_checked: OFFICIAL_KEYWORDS
   });
 });
 
