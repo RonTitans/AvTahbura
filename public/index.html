@@ -439,23 +439,12 @@
                 </button>
             </div>
             
-            <div style="position: absolute; top: 15px; right: 15px;">
-                <a href="/integrations.html" style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    text-decoration: none;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    font-size: 12px;
-                    font-weight: 600;
-                    transition: all 0.3s ease;
-                    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-                    display: inline-block;
-                " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';" 
-                   onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.3)';">
+            <!-- Integration button removed as requested -->
+            <!-- <div style="position: absolute; top: 15px; right: 15px;">
+                <a href="/integrations.html" style="...">
                     ⚙️ אינטגרציות
                 </a>
-            </div>
+            </div> -->
             
             <div class="logo">🚌</div>
             <h1>מערכת פניות תחבורה</h1>
@@ -1509,6 +1498,23 @@
         window.copyToClipboard = copyToClipboard;
         window.sendToGoogleSheet = sendToGoogleSheet;
         window.logout = logout;
+        
+        // Keep session alive by checking every 5 minutes
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/session-info', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.loggedIn) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                }
+            } catch (error) {
+                console.error('Session check failed:', error);
+            }
+        }, 5 * 60 * 1000); // Every 5 minutes
         
         }); // End DOMContentLoaded
     </script>
