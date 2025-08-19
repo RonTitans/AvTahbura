@@ -721,6 +721,16 @@
                     body: JSON.stringify(requestBody)
                 });
 
+                // Check if response is ok
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Session expired, redirect to login
+                        window.location.href = '/login-new.html';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
                 
                 if (currentMode === 'regular') {
@@ -1252,12 +1262,20 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include', // Include cookies for authentication
                     body: JSON.stringify({
                         original_inquiry: currentInquiry,
                         selected_response: selectedMatch.original_response,
                         case_id: selectedMatch.case_id
                     })
                 });
+
+                // Check for authentication error
+                if (response.status === 401) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                    return;
+                }
 
                 let officialResponse;
                 
@@ -1387,6 +1405,7 @@
                     headers: {
                         'Content-Type': 'application/json; charset=utf-8',
                     },
+                    credentials: 'include', // Include cookies for authentication
                     body: JSON.stringify({
                         inquiry: currentInquiry,
                         response: currentOfficialResponse,
@@ -1394,6 +1413,13 @@
                         source: 'municipal_inquiry_system'
                     })
                 });
+
+                // Check for authentication error
+                if (response.status === 401) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                    return;
+                }
 
                 const result = await response.json();
 
