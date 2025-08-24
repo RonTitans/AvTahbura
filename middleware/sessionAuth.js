@@ -123,7 +123,14 @@ function redirectToLogin(req, res) {
   const loginPage = useSupabase ? '/login-new.html' : '/login.html';
   
   // For API requests, return JSON
-  if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/')) {
+  if (req.path.startsWith('/api/') || 
+      req.path.startsWith('/integrations/') ||
+      req.path === '/recommend' ||
+      req.path === '/exact-search' ||
+      req.path === '/search-by-line' ||
+      req.path === '/search-by-ticket' ||
+      req.path === '/generate-official-response' ||
+      req.path === '/append-to-sheet') {
     return res.status(401).json({ 
       success: false, 
       error: 'נדרשת התחברות',
