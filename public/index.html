@@ -791,9 +791,27 @@
                 
                 data.related_matches.forEach((match, index) => {
                     const formattedDate = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : 'לא זמין';
+                    const caseId = match.case_id || '';
+                    const matchReasons = match.match_reasons || '';
+                    
                     html += `
                         <div class="related-match" data-match-index="${index}">
                             <div class="metadata">
+                                ${caseId ? `
+                                    <div class="metadata-item">
+                                        <span>🔖</span>
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            color: #4299e1; 
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
+                                            ${caseId}
+                                        </span>
+                                    </div>
+                                ` : ''}
                                 <div class="metadata-item">
                                     <span>📅</span>
                                     <span>תאריך: ${formattedDate}</span>
@@ -802,11 +820,19 @@
                                     <span>📍</span>
                                     <span>שורה: ${match.row_number || 'לא זמין'}</span>
                                 </div>
-                                <div class="metadata-item">
-                                    <span>🎯</span>
-                                    <span>רלוונטיות: ${match.relevance_score}</span>
-                                </div>
+                                ${matchReasons ? `
+                                    <div class="metadata-item">
+                                        <span>🔍</span>
+                                        <span style="color: #805ad5; font-weight: 600;">${matchReasons}</span>
+                                    </div>
+                                ` : ''}
                             </div>
+                            ${match.summary ? `
+                                <div style="background: #f0f4f8; padding: 8px 12px; border-radius: 6px; margin: 10px 0; border-right: 3px solid #4299e1;">
+                                    <strong style="color: #2d3748;">תמצית:</strong>
+                                    <span style="color: #4a5568; font-size: 14px;">${escapeHtml(match.summary)}</span>
+                                </div>
+                            ` : ''}
                             <strong>${escapeHtml(match.description)}</strong>
                             <div class="result-content" style="margin-top: 10px;">${escapeHtml(match.original_response)}</div>
                             <button class="select-response-btn" onclick="selectResponse(${index})">בחר תשובה זו</button>
