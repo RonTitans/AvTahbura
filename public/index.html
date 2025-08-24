@@ -909,8 +909,17 @@
                                     <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
                                         #${idx + 1}
                                     </span>
-                                    ${caseId ? `
-                                        <span style="margin-right: 10px; color: #718096; font-size: 12px;">
+                                    ${caseId && caseId !== `result-${idx}` ? `
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            margin-right: 10px; 
+                                            color: #4299e1; 
+                                            font-size: 12px;
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
                                             ${caseId}
                                         </span>
                                     ` : ''}
@@ -1638,6 +1647,57 @@
         window.copyToClipboard = copyToClipboard;
         window.sendToGoogleSheet = sendToGoogleSheet;
         window.logout = logout;
+        
+        // Function to search by ticket ID when case ID is clicked
+        window.searchByTicketId = function(ticketId) {
+            // Clear current search
+            document.getElementById('inquiryText').value = '';
+            
+            // Show loading
+            const loading = document.querySelector('.loading');
+            const results = document.getElementById('results');
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            
+            // Perform ticket search
+            fetch('/search-by-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ ticketId: ticketId })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login-new.html';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                loading.style.display = 'none';
+                
+                // Display ticket timeline results
+                displayTicketResults(data, 'לפי מזהה פנייה: ' + ticketId);
+                
+                // Scroll to results
+                results.scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                console.error('Error searching by ticket ID:', error);
+                loading.style.display = 'none';
+                results.innerHTML = `
+                    <div style="padding: 20px; background: #fed7d7; border-radius: 8px; color: #742a2a;">
+                        <strong>שגיאה בחיפוש:</strong> ${error.message}
+                    </div>
+                `;
+                results.style.display = 'block';
+            });
+        };
         
         // Keep session alive by checking every 5 minutes
         setInterval(async () => {
