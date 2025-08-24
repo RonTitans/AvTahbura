@@ -1338,34 +1338,60 @@ app.post('/search-by-line', async (req, res) => {
     // Extract common topics from summaries
     const topicCounts = {};
     const commonTopicPatterns = [
-      { pattern: /שינוי\s+מסלול/g, topic: 'שינוי מסלול' },
-      { pattern: /הוספת\s+תחנה|תחנה\s+חדשה/g, topic: 'הוספת תחנה' },
-      { pattern: /ביטול\s+תחנה/g, topic: 'ביטול תחנה' },
-      { pattern: /עומס\s+נוסעים|צפיפות|עמוס/g, topic: 'עומס נוסעים' },
-      { pattern: /תדירות|הגברת\s+תדירות|תוספת\s+נסיעות/g, topic: 'תדירות' },
-      { pattern: /לוח\s+זמנים|לו"ז|שעות\s+פעילות/g, topic: 'לוח זמנים' },
-      { pattern: /נגישות|כסא\s+גלגלים|מוגבלות/g, topic: 'נגישות' },
-      { pattern: /איחור|עיכוב|דילוג/g, topic: 'איחורים' },
-      { pattern: /הארכת\s+קו|הארכת\s+מסלול/g, topic: 'הארכת קו' },
-      { pattern: /קיצור\s+קו|קיצור\s+מסלול/g, topic: 'קיצור קו' },
-      { pattern: /בקשה\s+לקו\s+חדש|קו\s+חדש/g, topic: 'קו חדש' },
-      { pattern: /חיבור|קישור\s+בין/g, topic: 'חיבור בין אזורים' },
-      { pattern: /שעות\s+לילה|שירות\s+לילה/g, topic: 'שירות לילה' },
-      { pattern: /סופי?\s+שבוע|שבת|חג/g, topic: 'סוף שבוע וחגים' },
-      { pattern: /בטיחות|סכנה|מסוכן/g, topic: 'בטיחות' }
+      { pattern: /^שינוי\s+מסלול/, topic: 'שינוי מסלול' },
+      { pattern: /^הוספת\s+תחנה|^תחנה\s+חדשה/, topic: 'הוספת תחנה' },
+      { pattern: /^ביטול\s+תחנה/, topic: 'ביטול תחנה' },
+      { pattern: /^עומס\s+נוסעים|^צפיפות|^עמוס/, topic: 'עומס נוסעים' },
+      { pattern: /^תדירות|^הגברת\s+תדירות|^תוספת\s+נסיעות/, topic: 'תדירות' },
+      { pattern: /^לוח\s+זמנים|^לו"ז|^שעות\s+פעילות/, topic: 'לוח זמנים' },
+      { pattern: /^נגישות|^כסא\s+גלגלים|^מוגבלות/, topic: 'נגישות' },
+      { pattern: /^איחור|^עיכוב|^דילוג/, topic: 'איחורים' },
+      { pattern: /^הארכת\s+קו|^הארכת\s+מסלול/, topic: 'הארכת קו' },
+      { pattern: /^קיצור\s+קו|^קיצור\s+מסלול/, topic: 'קיצור קו' },
+      { pattern: /^בקשה\s+לקו\s+חדש|^קו\s+חדש/, topic: 'קו חדש' },
+      { pattern: /^חיבור|^קישור\s+בין/, topic: 'חיבור בין אזורים' },
+      { pattern: /^שעות\s+לילה|^שירות\s+לילה/, topic: 'שירות לילה' },
+      { pattern: /^סופי?\s+שבוע|^שבת|^חג/, topic: 'סוף שבוע וחגים' },
+      { pattern: /^בטיחות|^סכנה|^מסוכן/, topic: 'בטיחות' },
+      { pattern: /^הוספת\s+קו/, topic: 'הוספת קו' },
+      { pattern: /^ביטול\s+קו/, topic: 'ביטול קו' },
+      { pattern: /^תלונה/, topic: 'תלונה' },
+      { pattern: /^בקשה/, topic: 'בקשה כללית' },
+      { pattern: /^הסרת/, topic: 'הסרת תחנה/קו' },
+      { pattern: /^העברת/, topic: 'העברת תחנה/קו' }
     ];
     
     // Analyze each match to categorize by topic
     matches.forEach(match => {
-      const summary = match.summary || '';
+      const summary = (match.summary || '').trim();
       let matchedTopic = 'אחר'; // Default topic
       
-      // Check each pattern
+      // Check each pattern - now checking from the beginning of the string
       for (const { pattern, topic } of commonTopicPatterns) {
         if (pattern.test(summary)) {
           matchedTopic = topic;
           break; // Use first matching topic
         }
+      }
+      
+      // If still "אחר", try more flexible matching for common words at start
+      if (matchedTopic === 'אחר' && summary) {
+        // Get first 50 characters to check for keywords
+        const summaryStart = summary.substring(0, 50);
+        
+        // Check for keywords that might appear with slight variations
+        if (summaryStart.includes('שינוי מסלול')) matchedTopic = 'שינוי מסלול';
+        else if (summaryStart.includes('הוספת תחנ')) matchedTopic = 'הוספת תחנה';
+        else if (summaryStart.includes('ביטול תחנ')) matchedTopic = 'ביטול תחנה';
+        else if (summaryStart.includes('עומס')) matchedTopic = 'עומס נוסעים';
+        else if (summaryStart.includes('תדירות')) matchedTopic = 'תדירות';
+        else if (summaryStart.includes('לוח זמנים') || summaryStart.includes('לו"ז')) matchedTopic = 'לוח זמנים';
+        else if (summaryStart.includes('נגישות')) matchedTopic = 'נגישות';
+        else if (summaryStart.includes('איחור') || summaryStart.includes('עיכוב')) matchedTopic = 'איחורים';
+        else if (summaryStart.includes('הארכת')) matchedTopic = 'הארכת קו';
+        else if (summaryStart.includes('קיצור')) matchedTopic = 'קיצור קו';
+        else if (summaryStart.includes('תלונה')) matchedTopic = 'תלונה';
+        else if (summaryStart.includes('בקשה')) matchedTopic = 'בקשה כללית';
       }
       
       // Add the topic to the match object
