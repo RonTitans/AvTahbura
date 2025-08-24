@@ -1335,10 +1335,56 @@ app.post('/search-by-line', async (req, res) => {
       return b.relevance_score - a.relevance_score;
     });
     
+    // Extract common topics from summaries
+    const topicCounts = {};
+    const commonTopicPatterns = [
+      { pattern: /שינוי\s+מסלול/g, topic: 'שינוי מסלול' },
+      { pattern: /הוספת\s+תחנה|תחנה\s+חדשה/g, topic: 'הוספת תחנה' },
+      { pattern: /ביטול\s+תחנה/g, topic: 'ביטול תחנה' },
+      { pattern: /עומס\s+נוסעים|צפיפות|עמוס/g, topic: 'עומס נוסעים' },
+      { pattern: /תדירות|הגברת\s+תדירות|תוספת\s+נסיעות/g, topic: 'תדירות' },
+      { pattern: /לוח\s+זמנים|לו"ז|שעות\s+פעילות/g, topic: 'לוח זמנים' },
+      { pattern: /נגישות|כסא\s+גלגלים|מוגבלות/g, topic: 'נגישות' },
+      { pattern: /איחור|עיכוב|דילוג/g, topic: 'איחורים' },
+      { pattern: /הארכת\s+קו|הארכת\s+מסלול/g, topic: 'הארכת קו' },
+      { pattern: /קיצור\s+קו|קיצור\s+מסלול/g, topic: 'קיצור קו' },
+      { pattern: /בקשה\s+לקו\s+חדש|קו\s+חדש/g, topic: 'קו חדש' },
+      { pattern: /חיבור|קישור\s+בין/g, topic: 'חיבור בין אזורים' },
+      { pattern: /שעות\s+לילה|שירות\s+לילה/g, topic: 'שירות לילה' },
+      { pattern: /סופי?\s+שבוע|שבת|חג/g, topic: 'סוף שבוע וחגים' },
+      { pattern: /בטיחות|סכנה|מסוכן/g, topic: 'בטיחות' }
+    ];
+    
+    // Analyze each match to categorize by topic
+    matches.forEach(match => {
+      const summary = match.summary || '';
+      let matchedTopic = 'אחר'; // Default topic
+      
+      // Check each pattern
+      for (const { pattern, topic } of commonTopicPatterns) {
+        if (pattern.test(summary)) {
+          matchedTopic = topic;
+          break; // Use first matching topic
+        }
+      }
+      
+      // Add the topic to the match object
+      match.topic = matchedTopic;
+      
+      // Count topics for statistics
+      topicCounts[matchedTopic] = (topicCounts[matchedTopic] || 0) + 1;
+    });
+    
+    // Convert topic counts to sorted array
+    const topicsList = Object.entries(topicCounts)
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count);
+    
     if (busLines.includes('630')) {
       console.log(`📊 Debug: Found "630" in ${debugCount} תמצית entries total`);
     }
     console.log(`✅ Found ${matches.length} precise matches for bus lines: ${busLines.join(', ')}`);
+    console.log(`📑 Topics distribution:`, topicsList);
     
     res.json({
       success: true,
@@ -1346,7 +1392,8 @@ app.post('/search-by-line', async (req, res) => {
       bus_lines: busLines,
       original_query: originalQuery,
       total_matches: matches.length,
-      matches: matches // Return all results, frontend handles display
+      topics: topicsList, // Add topics list for dropdown
+      matches: matches // Return all results with topic field, frontend handles display
     });
     
   } catch (error) {

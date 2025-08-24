@@ -837,21 +837,48 @@
         function displayPreciseResults(data, searchType) {
             const INITIAL_SHOW = 10; // Show first 10 results
             const matches = data.matches || [];
+            const topics = data.topics || [];
             const totalMatches = matches.length;
+            
+            // Store original matches globally for filtering
+            window.allPreciseMatches = matches;
+            window.currentTopicFilter = 'all';
             
             let html = `
                 <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                     <h3>🚌 תוצאות חיפוש – ${searchType}</h3>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <p style="margin: 0; font-size: 18px; font-weight: bold; color: #2d3748;">
-                            נמצאו ${totalMatches} תוצאות
+                            נמצאו <span id="matchesCount">${totalMatches}</span> תוצאות
                         </p>
-                        ${totalMatches > INITIAL_SHOW ? `
-                            <span style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
-                                מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}
-                            </span>
-                        ` : ''}
+                        <span id="showingCount" style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                            ${totalMatches > INITIAL_SHOW ? `מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}` : `מוצגות ${totalMatches}`}
+                        </span>
                     </div>
+                    
+                    ${topics.length > 0 ? `
+                        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">
+                                🔍 סנן לפי נושא:
+                            </label>
+                            <select id="topicFilter" onchange="filterByTopic(this.value)" style="
+                                width: 100%;
+                                padding: 10px;
+                                border: 2px solid #cbd5e0;
+                                border-radius: 6px;
+                                font-size: 16px;
+                                font-family: inherit;
+                                background: white;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.borderColor='#4299e1'" onmouseout="this.style.borderColor='#cbd5e0'">
+                                <option value="all">הצג הכל (${totalMatches} תוצאות)</option>
+                                ${topics.map(t => `
+                                    <option value="${t.topic}">${t.topic} (${t.count} תוצאות)</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    ` : ''}
                 </div>
             `;
             
@@ -863,9 +890,10 @@
                     const isHidden = idx >= INITIAL_SHOW;
                     const caseId = match.case_id || `result-${idx}`;
                     const date = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : '';
+                    const topic = match.topic || 'אחר';
                     
                     html += `
-                        <div class="result-card precise-result" data-index="${idx}" style="
+                        <div class="result-card precise-result" data-index="${idx}" data-topic="${topic}" style="
                             margin-bottom: 15px; 
                             padding: 15px; 
                             background: white; 
@@ -893,9 +921,14 @@
                                         </span>
                                     ` : ''}
                                 </div>
-                                <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
-                                    קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
-                                </span>
+                                <div style="display: flex; gap: 8px;">
+                                    <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
+                                    </span>
+                                    <span style="background: #805ad5; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        ${topic}
+                                    </span>
+                                </div>
                             </div>
                             
                             <div class="result-summary" style="margin-bottom: 10px;">
@@ -1001,6 +1034,87 @@
             } else {
                 responseDiv.style.display = 'none';
                 button.textContent = 'הצג תשובה מלאה ↓';
+            }
+        }
+        
+        // Filter results by topic
+        window.filterByTopic = function(selectedTopic) {
+            window.currentTopicFilter = selectedTopic;
+            const allResults = document.querySelectorAll('.precise-result');
+            let visibleCount = 0;
+            let filteredCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                const cardIndex = parseInt(resultCard.getAttribute('data-index'));
+                
+                if (selectedTopic === 'all' || cardTopic === selectedTopic) {
+                    // Show this result if it matches the filter
+                    filteredCount++;
+                    if (visibleCount < 10) {
+                        resultCard.style.display = '';
+                        visibleCount++;
+                    } else {
+                        resultCard.style.display = 'none';
+                    }
+                } else {
+                    // Hide this result
+                    resultCard.style.display = 'none';
+                }
+            });
+            
+            // Update counts
+            document.getElementById('matchesCount').textContent = filteredCount;
+            
+            const showingCountElement = document.getElementById('showingCount');
+            if (filteredCount > 10) {
+                showingCountElement.textContent = `מוצגות ${visibleCount} מתוך ${filteredCount}`;
+            } else {
+                showingCountElement.textContent = `מוצגות ${filteredCount}`;
+            }
+            
+            // Update or hide the "Show More" button
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                if (filteredCount > 10) {
+                    showMoreBtn.style.display = '';
+                    showMoreBtn.innerHTML = `הצג עוד תוצאות (${filteredCount - visibleCount} נוספות)`;
+                    showMoreBtn.onclick = function() { showMoreFilteredResults(selectedTopic); };
+                } else {
+                    showMoreBtn.style.display = 'none';
+                }
+            }
+        }
+        
+        // Show more filtered results
+        window.showMoreFilteredResults = function(topic) {
+            const allResults = document.querySelectorAll('.precise-result');
+            let shownCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                
+                if (topic === 'all' || cardTopic === topic) {
+                    if (resultCard.style.display === 'none' && shownCount < 50) {
+                        resultCard.style.display = '';
+                        shownCount++;
+                    }
+                }
+            });
+            
+            // Update showing count
+            const visibleResults = document.querySelectorAll('.precise-result:not([style*="display: none"])').length;
+            const totalFiltered = topic === 'all' ? 
+                window.allPreciseMatches.length : 
+                window.allPreciseMatches.filter(m => m.topic === topic).length;
+            
+            document.getElementById('showingCount').textContent = `מוצגות ${visibleResults} מתוך ${totalFiltered}`;
+            
+            // Hide button if all are shown
+            if (visibleResults >= totalFiltered) {
+                document.getElementById('showMoreBtn').style.display = 'none';
+            } else {
+                document.getElementById('showMoreBtn').innerHTML = `הצג עוד תוצאות (${totalFiltered - visibleResults} נוספות)`;
             }
         }
         
