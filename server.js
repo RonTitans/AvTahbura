@@ -717,6 +717,151 @@ function extractLineNumbers(text) {
   return lineNumbers;
 }
 
+// Smart Query Analyzer - Extract components from user query
+function analyzeQuery(text) {
+  const analysis = {
+    busLines: [],
+    locations: [],
+    problemType: null,
+    keywords: []
+  };
+  
+  // Extract bus lines
+  analysis.busLines = extractLineNumbers(text);
+  
+  // Extract locations (common Jerusalem neighborhoods and areas)
+  const locationPatterns = [
+    'רמות', 'גילה', 'פסגת זאב', 'הר נוף', 'קרית יובל', 'תלפיות', 'בית וגן',
+    'רמת שלמה', 'גאולה', 'מאה שערים', 'העיר העתיקה', 'ממילא', 'נחלאות',
+    'קטמון', 'בקעה', 'ארנונה', 'רחביה', 'טלביה', 'ימין משה', 'משכנות שאננים',
+    'עין כרם', 'מלחה', 'בית הכרם', 'בית שמש', 'מעלה אדומים', 'גבעת זאב',
+    'הדסה', 'הר הצופים', 'גבעת רם', 'גבעת מרדכי', 'רוממה', 'סנהדריה',
+    'הר חוצבים', 'רמת אשכול', 'רמת דניה', 'אבו טור', 'ארמון הנציב', 'גבעת המבתר'
+  ];
+  
+  locationPatterns.forEach(location => {
+    if (text.includes(location)) {
+      analysis.locations.push(location);
+    }
+  });
+  
+  // Detect problem type based on keywords
+  const problemTypes = [
+    { keywords: ['שינוי מסלול', 'שנה מסלול', 'לשנות מסלול'], type: 'שינוי מסלול' },
+    { keywords: ['הוספת תחנה', 'תחנה חדשה', 'להוסיף תחנה'], type: 'הוספת תחנה' },
+    { keywords: ['ביטול תחנה', 'לבטל תחנה', 'הסרת תחנה'], type: 'ביטול תחנה' },
+    { keywords: ['עומס', 'צפיפות', 'עמוס', 'מלא'], type: 'עומס נוסעים' },
+    { keywords: ['תדירות', 'הגברת', 'תוספת נסיעות', 'יותר אוטובוסים'], type: 'תדירות' },
+    { keywords: ['לוח זמנים', 'לו"ז', 'שעות פעילות', 'מתי מגיע'], type: 'לוח זמנים' },
+    { keywords: ['נגישות', 'כסא גלגלים', 'מוגבלות', 'נכים'], type: 'נגישות' },
+    { keywords: ['איחור', 'עיכוב', 'דילוג', 'לא הגיע'], type: 'איחורים' },
+    { keywords: ['הארכת קו', 'להאריך', 'הארכת מסלול'], type: 'הארכת קו' },
+    { keywords: ['קיצור קו', 'לקצר', 'קיצור מסלול'], type: 'קיצור קו' },
+    { keywords: ['קו חדש', 'בקשה לקו', 'אין קו'], type: 'קו חדש' },
+    { keywords: ['תלונה', 'להתלונן', 'בעיה עם'], type: 'תלונה' },
+    { keywords: ['בטיחות', 'סכנה', 'מסוכן'], type: 'בטיחות' }
+  ];
+  
+  for (const {keywords, type} of problemTypes) {
+    if (keywords.some(keyword => text.includes(keyword))) {
+      analysis.problemType = type;
+      break;
+    }
+  }
+  
+  // Extract other important keywords (excluding common words)
+  const commonWords = ['את', 'של', 'על', 'עם', 'אני', 'הוא', 'היא', 'זה', 'יש', 'אין', 'לא', 'כן'];
+  const words = text.split(/\s+/);
+  analysis.keywords = words.filter(word => 
+    word.length > 2 && 
+    !commonWords.includes(word) &&
+    !analysis.busLines.includes(parseInt(word)) &&
+    !analysis.locations.includes(word)
+  ).slice(0, 5); // Keep top 5 keywords
+  
+  return analysis;
+}
+
+// Enhanced smart search function
+function findSmartMatches(inquiryText, municipalData, maxResults = 10) {
+  console.log(`\n🧠 Smart Search for: "${inquiryText}"`);
+  
+  const queryAnalysis = analyzeQuery(inquiryText);
+  console.log('📊 Query Analysis:', queryAnalysis);
+  
+  const scoredMatches = [];
+  
+  municipalData.forEach((entry) => {
+    let score = 0;
+    let matchReasons = [];
+    
+    // Check both תמצית and הפניה columns
+    const summary = entry['תמצית'] || '';
+    const inquiry = entry['הפניה'] || entry.inquiry_text || '';
+    const response = entry['תיאור'] || entry.response_text || '';
+    const combinedText = `${summary} ${inquiry} ${response}`.toLowerCase();
+    
+    // Score for bus line matches (40% weight)
+    if (queryAnalysis.busLines.length > 0) {
+      const entryBusLines = extractLineNumbers(combinedText);
+      const matchingLines = queryAnalysis.busLines.filter(line => entryBusLines.includes(line));
+      if (matchingLines.length > 0) {
+        score += 0.4 * (matchingLines.length / queryAnalysis.busLines.length);
+        matchReasons.push(`קווים: ${matchingLines.join(', ')}`);
+      }
+    }
+    
+    // Score for location matches (30% weight)
+    if (queryAnalysis.locations.length > 0) {
+      const matchingLocations = queryAnalysis.locations.filter(loc => combinedText.includes(loc));
+      if (matchingLocations.length > 0) {
+        score += 0.3 * (matchingLocations.length / queryAnalysis.locations.length);
+        matchReasons.push(`מיקומים: ${matchingLocations.join(', ')}`);
+      }
+    }
+    
+    // Score for problem type match (20% weight)
+    if (queryAnalysis.problemType) {
+      // Check if entry has same problem type
+      const entryAnalysis = analyzeQuery(combinedText);
+      if (entryAnalysis.problemType === queryAnalysis.problemType) {
+        score += 0.2;
+        matchReasons.push(`סוג: ${queryAnalysis.problemType}`);
+      }
+    }
+    
+    // Score for keyword matches (10% weight)
+    if (queryAnalysis.keywords.length > 0) {
+      const matchingKeywords = queryAnalysis.keywords.filter(keyword => 
+        combinedText.includes(keyword.toLowerCase())
+      );
+      if (matchingKeywords.length > 0) {
+        score += 0.1 * (matchingKeywords.length / queryAnalysis.keywords.length);
+        matchReasons.push(`מילים: ${matchingKeywords.length}`);
+      }
+    }
+    
+    // Only include if score is meaningful
+    if (score > 0.15) {
+      scoredMatches.push({
+        ...entry,
+        smartScore: score,
+        matchReasons: matchReasons.join(' | '),
+        // Include the actual content for display
+        summary: summary,
+        inquiry: inquiry,
+        response: response
+      });
+    }
+  });
+  
+  // Sort by score and return top results
+  scoredMatches.sort((a, b) => b.smartScore - a.smartScore);
+  
+  console.log(`✅ Found ${scoredMatches.length} smart matches`);
+  return scoredMatches.slice(0, maxResults);
+}
+
 // Clean historical response of system references
 function cleanHistoricalResponse(response) {
   if (!response) return '';
@@ -1092,13 +1237,37 @@ app.post('/recommend', async (req, res) => {
       }
     };
     
-    // Find semantic matches with strict threshold
-    const matches = await findSemanticMatches(inquiry_text, 0.78, max_recommendations);
+    // Try smart search first
+    let matches = findSmartMatches(inquiry_text, municipalData, max_recommendations * 2);
+    
+    // If smart search doesn't find enough, fall back to semantic/text search
+    if (matches.length < 3) {
+      console.log('📊 Smart search found few results, adding semantic search...');
+      const semanticMatches = await findSemanticMatches(inquiry_text, 0.78, max_recommendations);
+      
+      // Merge matches, avoiding duplicates
+      const existingIds = new Set(matches.map(m => m.case_id));
+      semanticMatches.forEach(match => {
+        if (!existingIds.has(match.case_id)) {
+          matches.push({
+            ...match,
+            smartScore: match.similarity * 0.5, // Give semantic matches lower smart score
+            matchReasons: `דמיון: ${(match.similarity * 100).toFixed(0)}%`
+          });
+        }
+      });
+      
+      // Re-sort by smart score
+      matches.sort((a, b) => (b.smartScore || 0) - (a.smartScore || 0));
+    }
+    
+    // Limit to requested number
+    matches = matches.slice(0, max_recommendations);
     
     response.debug.matches_found = matches.length;
-    response.debug.top_similarity_score = matches.length > 0 ? matches[0].similarity : 0;
-    response.debug.search_method = embeddingsReady ? 'semantic_embeddings' : 'text_similarity';
-    response.debug.threshold_used = embeddingsReady ? 0.78 : 0.2;
+    response.debug.top_similarity_score = matches.length > 0 ? (matches[0].similarity || matches[0].smartScore) : 0;
+    response.debug.search_method = 'smart_hybrid';
+    response.debug.threshold_used = 0.15;
     response.debug.openai_available = openaiAvailable;
     response.debug.embeddings_ready = embeddingsReady;
     
@@ -1117,14 +1286,16 @@ app.post('/recommend', async (req, res) => {
         };
       }
       
-      // Always provide related matches
+      // Always provide related matches with smart search info
       response.related_matches = matches.map(match => ({
         case_id: match.case_id,
-        description: match.inquiry_text,
-        original_response: match.response_text,
-        relevance_score: match.similarity,
+        description: match.inquiry || match.inquiry_text || match['הפניה'] || '',
+        original_response: match.response || match.response_text || match['תיאור'] || '',
+        relevance_score: match.smartScore || match.similarity || 0,
+        match_reasons: match.matchReasons || '',
         row_number: match.row_number,
-        created_date: match.created_date
+        created_date: match.created_date,
+        summary: match.summary || match['תמצית'] || ''
       }));
       
       // Get or create session context
@@ -1349,10 +1520,82 @@ app.post('/search-by-line', async (req, res) => {
       return b.relevance_score - a.relevance_score;
     });
     
+    // Extract common topics from summaries
+    const topicCounts = {};
+    const commonTopicPatterns = [
+      { pattern: /^שינוי\s+מסלול/, topic: 'שינוי מסלול' },
+      { pattern: /^הוספת\s+תחנה|^תחנה\s+חדשה/, topic: 'הוספת תחנה' },
+      { pattern: /^ביטול\s+תחנה/, topic: 'ביטול תחנה' },
+      { pattern: /^עומס\s+נוסעים|^צפיפות|^עמוס/, topic: 'עומס נוסעים' },
+      { pattern: /^תדירות|^הגברת\s+תדירות|^תוספת\s+נסיעות/, topic: 'תדירות' },
+      { pattern: /^לוח\s+זמנים|^לו"ז|^שעות\s+פעילות/, topic: 'לוח זמנים' },
+      { pattern: /^נגישות|^כסא\s+גלגלים|^מוגבלות/, topic: 'נגישות' },
+      { pattern: /^איחור|^עיכוב|^דילוג/, topic: 'איחורים' },
+      { pattern: /^הארכת\s+קו|^הארכת\s+מסלול/, topic: 'הארכת קו' },
+      { pattern: /^קיצור\s+קו|^קיצור\s+מסלול/, topic: 'קיצור קו' },
+      { pattern: /^בקשה\s+לקו\s+חדש|^קו\s+חדש/, topic: 'קו חדש' },
+      { pattern: /^חיבור|^קישור\s+בין/, topic: 'חיבור בין אזורים' },
+      { pattern: /^שעות\s+לילה|^שירות\s+לילה/, topic: 'שירות לילה' },
+      { pattern: /^סופי?\s+שבוע|^שבת|^חג/, topic: 'סוף שבוע וחגים' },
+      { pattern: /^בטיחות|^סכנה|^מסוכן/, topic: 'בטיחות' },
+      { pattern: /^הוספת\s+קו/, topic: 'הוספת קו' },
+      { pattern: /^ביטול\s+קו/, topic: 'ביטול קו' },
+      { pattern: /^תלונה/, topic: 'תלונה' },
+      { pattern: /^בקשה/, topic: 'בקשה כללית' },
+      { pattern: /^הסרת/, topic: 'הסרת תחנה/קו' },
+      { pattern: /^העברת/, topic: 'העברת תחנה/קו' }
+    ];
+    
+    // Analyze each match to categorize by topic
+    matches.forEach(match => {
+      const summary = (match.summary || '').trim();
+      let matchedTopic = 'אחר'; // Default topic
+      
+      // Check each pattern - now checking from the beginning of the string
+      for (const { pattern, topic } of commonTopicPatterns) {
+        if (pattern.test(summary)) {
+          matchedTopic = topic;
+          break; // Use first matching topic
+        }
+      }
+      
+      // If still "אחר", try more flexible matching for common words at start
+      if (matchedTopic === 'אחר' && summary) {
+        // Get first 50 characters to check for keywords
+        const summaryStart = summary.substring(0, 50);
+        
+        // Check for keywords that might appear with slight variations
+        if (summaryStart.includes('שינוי מסלול')) matchedTopic = 'שינוי מסלול';
+        else if (summaryStart.includes('הוספת תחנ')) matchedTopic = 'הוספת תחנה';
+        else if (summaryStart.includes('ביטול תחנ')) matchedTopic = 'ביטול תחנה';
+        else if (summaryStart.includes('עומס')) matchedTopic = 'עומס נוסעים';
+        else if (summaryStart.includes('תדירות')) matchedTopic = 'תדירות';
+        else if (summaryStart.includes('לוח זמנים') || summaryStart.includes('לו"ז')) matchedTopic = 'לוח זמנים';
+        else if (summaryStart.includes('נגישות')) matchedTopic = 'נגישות';
+        else if (summaryStart.includes('איחור') || summaryStart.includes('עיכוב')) matchedTopic = 'איחורים';
+        else if (summaryStart.includes('הארכת')) matchedTopic = 'הארכת קו';
+        else if (summaryStart.includes('קיצור')) matchedTopic = 'קיצור קו';
+        else if (summaryStart.includes('תלונה')) matchedTopic = 'תלונה';
+        else if (summaryStart.includes('בקשה')) matchedTopic = 'בקשה כללית';
+      }
+      
+      // Add the topic to the match object
+      match.topic = matchedTopic;
+      
+      // Count topics for statistics
+      topicCounts[matchedTopic] = (topicCounts[matchedTopic] || 0) + 1;
+    });
+    
+    // Convert topic counts to sorted array
+    const topicsList = Object.entries(topicCounts)
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count);
+    
     if (busLines.includes('630')) {
       console.log(`📊 Debug: Found "630" in ${debugCount} תמצית entries total`);
     }
     console.log(`✅ Found ${matches.length} precise matches for bus lines: ${busLines.join(', ')}`);
+    console.log(`📑 Topics distribution:`, topicsList);
     
     res.json({
       success: true,
@@ -1360,7 +1603,8 @@ app.post('/search-by-line', async (req, res) => {
       bus_lines: busLines,
       original_query: originalQuery,
       total_matches: matches.length,
-      matches: matches // Return all results, frontend handles display
+      topics: topicsList, // Add topics list for dropdown
+      matches: matches // Return all results with topic field, frontend handles display
     });
     
   } catch (error) {

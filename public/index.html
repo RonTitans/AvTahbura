@@ -791,9 +791,27 @@
                 
                 data.related_matches.forEach((match, index) => {
                     const formattedDate = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : 'לא זמין';
+                    const caseId = match.case_id || '';
+                    const matchReasons = match.match_reasons || '';
+                    
                     html += `
                         <div class="related-match" data-match-index="${index}">
                             <div class="metadata">
+                                ${caseId ? `
+                                    <div class="metadata-item">
+                                        <span>🔖</span>
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            color: #4299e1; 
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
+                                            ${caseId}
+                                        </span>
+                                    </div>
+                                ` : ''}
                                 <div class="metadata-item">
                                     <span>📅</span>
                                     <span>תאריך: ${formattedDate}</span>
@@ -802,11 +820,19 @@
                                     <span>📍</span>
                                     <span>שורה: ${match.row_number || 'לא זמין'}</span>
                                 </div>
-                                <div class="metadata-item">
-                                    <span>🎯</span>
-                                    <span>רלוונטיות: ${match.relevance_score}</span>
-                                </div>
+                                ${matchReasons ? `
+                                    <div class="metadata-item">
+                                        <span>🔍</span>
+                                        <span style="color: #805ad5; font-weight: 600;">${matchReasons}</span>
+                                    </div>
+                                ` : ''}
                             </div>
+                            ${match.summary ? `
+                                <div style="background: #f0f4f8; padding: 8px 12px; border-radius: 6px; margin: 10px 0; border-right: 3px solid #4299e1;">
+                                    <strong style="color: #2d3748;">תמצית:</strong>
+                                    <span style="color: #4a5568; font-size: 14px;">${escapeHtml(match.summary)}</span>
+                                </div>
+                            ` : ''}
                             <strong>${escapeHtml(match.description)}</strong>
                             <div class="result-content" style="margin-top: 10px;">${escapeHtml(match.original_response)}</div>
                             <button class="select-response-btn" onclick="selectResponse(${index})">בחר תשובה זו</button>
@@ -836,21 +862,48 @@
         function displayPreciseResults(data, searchType) {
             const INITIAL_SHOW = 10; // Show first 10 results
             const matches = data.matches || [];
+            const topics = data.topics || [];
             const totalMatches = matches.length;
+            
+            // Store original matches globally for filtering
+            window.allPreciseMatches = matches;
+            window.currentTopicFilter = 'all';
             
             let html = `
                 <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                     <h3>🚌 תוצאות חיפוש – ${searchType}</h3>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <p style="margin: 0; font-size: 18px; font-weight: bold; color: #2d3748;">
-                            נמצאו ${totalMatches} תוצאות
+                            נמצאו <span id="matchesCount">${totalMatches}</span> תוצאות
                         </p>
-                        ${totalMatches > INITIAL_SHOW ? `
-                            <span style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
-                                מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}
-                            </span>
-                        ` : ''}
+                        <span id="showingCount" style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                            ${totalMatches > INITIAL_SHOW ? `מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}` : `מוצגות ${totalMatches}`}
+                        </span>
                     </div>
+                    
+                    ${topics.length > 0 ? `
+                        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">
+                                🔍 סנן לפי נושא:
+                            </label>
+                            <select id="topicFilter" onchange="filterByTopic(this.value)" style="
+                                width: 100%;
+                                padding: 10px;
+                                border: 2px solid #cbd5e0;
+                                border-radius: 6px;
+                                font-size: 16px;
+                                font-family: inherit;
+                                background: white;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.borderColor='#4299e1'" onmouseout="this.style.borderColor='#cbd5e0'">
+                                <option value="all">הצג הכל (${totalMatches} תוצאות)</option>
+                                ${topics.map(t => `
+                                    <option value="${t.topic}">${t.topic} (${t.count} תוצאות)</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    ` : ''}
                 </div>
             `;
             
@@ -862,9 +915,10 @@
                     const isHidden = idx >= INITIAL_SHOW;
                     const caseId = match.case_id || `result-${idx}`;
                     const date = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : '';
+                    const topic = match.topic || 'אחר';
                     
                     html += `
-                        <div class="result-card precise-result" data-index="${idx}" style="
+                        <div class="result-card precise-result" data-index="${idx}" data-topic="${topic}" style="
                             margin-bottom: 15px; 
                             padding: 15px; 
                             background: white; 
@@ -881,8 +935,17 @@
                                     <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
                                         #${idx + 1}
                                     </span>
-                                    ${caseId ? `
-                                        <span style="margin-right: 10px; color: #718096; font-size: 12px;">
+                                    ${caseId && caseId !== `result-${idx}` ? `
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            margin-right: 10px; 
+                                            color: #4299e1; 
+                                            font-size: 12px;
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
                                             ${caseId}
                                         </span>
                                     ` : ''}
@@ -892,9 +955,14 @@
                                         </span>
                                     ` : ''}
                                 </div>
-                                <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
-                                    קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
-                                </span>
+                                <div style="display: flex; gap: 8px;">
+                                    <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
+                                    </span>
+                                    <span style="background: #805ad5; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        ${topic}
+                                    </span>
+                                </div>
                             </div>
                             
                             <div class="result-summary" style="margin-bottom: 10px;">
@@ -1000,6 +1068,87 @@
             } else {
                 responseDiv.style.display = 'none';
                 button.textContent = 'הצג תשובה מלאה ↓';
+            }
+        }
+        
+        // Filter results by topic
+        window.filterByTopic = function(selectedTopic) {
+            window.currentTopicFilter = selectedTopic;
+            const allResults = document.querySelectorAll('.precise-result');
+            let visibleCount = 0;
+            let filteredCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                const cardIndex = parseInt(resultCard.getAttribute('data-index'));
+                
+                if (selectedTopic === 'all' || cardTopic === selectedTopic) {
+                    // Show this result if it matches the filter
+                    filteredCount++;
+                    if (visibleCount < 10) {
+                        resultCard.style.display = '';
+                        visibleCount++;
+                    } else {
+                        resultCard.style.display = 'none';
+                    }
+                } else {
+                    // Hide this result
+                    resultCard.style.display = 'none';
+                }
+            });
+            
+            // Update counts
+            document.getElementById('matchesCount').textContent = filteredCount;
+            
+            const showingCountElement = document.getElementById('showingCount');
+            if (filteredCount > 10) {
+                showingCountElement.textContent = `מוצגות ${visibleCount} מתוך ${filteredCount}`;
+            } else {
+                showingCountElement.textContent = `מוצגות ${filteredCount}`;
+            }
+            
+            // Update or hide the "Show More" button
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                if (filteredCount > 10) {
+                    showMoreBtn.style.display = '';
+                    showMoreBtn.innerHTML = `הצג עוד תוצאות (${filteredCount - visibleCount} נוספות)`;
+                    showMoreBtn.onclick = function() { showMoreFilteredResults(selectedTopic); };
+                } else {
+                    showMoreBtn.style.display = 'none';
+                }
+            }
+        }
+        
+        // Show more filtered results
+        window.showMoreFilteredResults = function(topic) {
+            const allResults = document.querySelectorAll('.precise-result');
+            let shownCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                
+                if (topic === 'all' || cardTopic === topic) {
+                    if (resultCard.style.display === 'none' && shownCount < 50) {
+                        resultCard.style.display = '';
+                        shownCount++;
+                    }
+                }
+            });
+            
+            // Update showing count
+            const visibleResults = document.querySelectorAll('.precise-result:not([style*="display: none"])').length;
+            const totalFiltered = topic === 'all' ? 
+                window.allPreciseMatches.length : 
+                window.allPreciseMatches.filter(m => m.topic === topic).length;
+            
+            document.getElementById('showingCount').textContent = `מוצגות ${visibleResults} מתוך ${totalFiltered}`;
+            
+            // Hide button if all are shown
+            if (visibleResults >= totalFiltered) {
+                document.getElementById('showMoreBtn').style.display = 'none';
+            } else {
+                document.getElementById('showMoreBtn').innerHTML = `הצג עוד תוצאות (${totalFiltered - visibleResults} נוספות)`;
             }
         }
         
@@ -1524,6 +1673,57 @@
         window.copyToClipboard = copyToClipboard;
         window.sendToGoogleSheet = sendToGoogleSheet;
         window.logout = logout;
+        
+        // Function to search by ticket ID when case ID is clicked
+        window.searchByTicketId = function(ticketId) {
+            // Clear current search
+            document.getElementById('inquiry').value = '';
+            
+            // Show loading
+            const loading = document.querySelector('.loading');
+            const results = document.getElementById('results');
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            
+            // Perform ticket search
+            fetch('/search-by-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ ticketId: ticketId })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login-new.html';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                loading.style.display = 'none';
+                
+                // Display ticket timeline results
+                displayTicketResults(data, 'לפי מזהה פנייה: ' + ticketId);
+                
+                // Scroll to results
+                results.scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                console.error('Error searching by ticket ID:', error);
+                loading.style.display = 'none';
+                results.innerHTML = `
+                    <div style="padding: 20px; background: #fed7d7; border-radius: 8px; color: #742a2a;">
+                        <strong>שגיאה בחיפוש:</strong> ${error.message}
+                    </div>
+                `;
+                results.style.display = 'block';
+            });
+        };
         
         // Keep session alive by checking every 5 minutes
         setInterval(async () => {
