@@ -1426,6 +1426,35 @@ app.post('/exact-search', async (req, res) => {
   }
 });
 
+// Helper function to check if a number appears in a date context
+function isDateContext(text, lineNumber, matchIndex) {
+  // Check if the number is part of a date pattern (DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY)
+  const beforeMatch = text.substring(Math.max(0, matchIndex - 3), matchIndex);
+  const afterMatch = text.substring(matchIndex + lineNumber.length, matchIndex + lineNumber.length + 10);
+  
+  // Check for date separators before or after the number
+  const datePatternAfter = /^[\/\.\-]\d{1,2}[\/\.\-]\d{2,4}/;
+  const datePatternBefore = /\d{1,2}[\/\.\-]$/;
+  const yearPattern = /^[\/\.\-]\d{4}/;  // Specifically for years like 21/2024
+  
+  if (datePatternAfter.test(afterMatch) || 
+      datePatternBefore.test(beforeMatch) ||
+      yearPattern.test(afterMatch)) {
+    return true;
+  }
+  
+  // Check if preceded by date-related words
+  const dateWords = ['תאריך', 'בתאריך', 'מתאריך', 'לתאריך', 'ביום', 'עד'];
+  const textBefore = text.substring(Math.max(0, matchIndex - 20), matchIndex);
+  for (const word of dateWords) {
+    if (textBefore.includes(word)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 // NEW: Precise search by bus line endpoint
 app.post('/search-by-line', async (req, res) => {
   try {
@@ -1460,23 +1489,68 @@ app.post('/search-by-line', async (req, res) => {
       
       // Check for exact line number matches in תמצית only
       busLines.forEach(line => {
-        // Use word boundary regex to avoid partial matches
-        // This will match "קו 30" or "30" but NOT "630" or "305"
-        const patterns = [
-          new RegExp(`\\b${line}\\b`, 'g'),  // Word boundary on both sides
-          new RegExp(`קו\\s+${line}\\b`, 'g'),  // "קו 30" pattern
-          new RegExp(`קווים[^0-9]*${line}\\b`, 'g'),  // "קווים" followed by the line
-        ];
-        
-        let matched = false;
-        for (const pattern of patterns) {
-          if (pattern.test(summary)) {
-            matched = true;
-            break;
-          }
+        // First check if this line number appears at all
+        if (!summary.includes(line)) {
+          return; // Skip if line number doesn't exist in text
         }
         
-        if (matched) {
+        // Find all occurrences and validate each one
+        let validMatch = false;
+        let searchIndex = 0;
+        
+        while (searchIndex < summary.length) {
+          const matchIndex = summary.indexOf(line, searchIndex);
+          if (matchIndex === -1) break;
+          
+          // Check if this occurrence is in a date context
+          const isDate = isDateContext(summary, line, matchIndex);
+          if (isDate) {
+            // Log when we skip a date match (for debugging)
+            if (line === '21' || busLines.includes('21')) {
+              console.log(`  ⏭️ Skipping date match for line ${line} at position ${matchIndex}: "${summary.substring(Math.max(0, matchIndex - 10), Math.min(summary.length, matchIndex + 15))}"`);
+            }
+          } else {
+            // Check for bus line context patterns
+            const beforeContext = summary.substring(Math.max(0, matchIndex - 15), matchIndex);
+            const afterContext = summary.substring(matchIndex + line.length, Math.min(summary.length, matchIndex + line.length + 5));
+            
+            // Positive patterns - these indicate it's likely a bus line
+            const busLinePatterns = [
+              /קו\s*$/,           // "קו" before the number
+              /קווים[^0-9]*$/,   // "קווים" before
+              /^[\s,]/,           // Space or comma after (common in lists)
+              /מסלול/,            // "route" context
+              /אוטובוס/,          // "bus" context
+              /תחבורה/,           // "transportation" context
+            ];
+            
+            // Also check word boundaries more strictly
+            const charBefore = matchIndex > 0 ? summary[matchIndex - 1] : ' ';
+            const charAfter = matchIndex + line.length < summary.length ? summary[matchIndex + line.length] : ' ';
+            
+            // Valid if preceded/followed by non-digit characters (word boundary)
+            const hasWordBoundary = !/\d/.test(charBefore) && !/\d/.test(charAfter);
+            
+            // Check if any positive pattern matches or has proper word boundaries
+            let hasPositiveContext = false;
+            for (const pattern of busLinePatterns) {
+              if (pattern.test(beforeContext) || pattern.test(afterContext)) {
+                hasPositiveContext = true;
+                break;
+              }
+            }
+            
+            if (hasPositiveContext || hasWordBoundary) {
+              validMatch = true;
+              console.log(`  ✅ Valid bus line match for ${line} at position ${matchIndex}`);
+              break;
+            }
+          }
+          
+          searchIndex = matchIndex + 1;
+        }
+        
+        if (validMatch) {
           lineMatches++;
           if (!foundLines.includes(line)) {
             foundLines.push(line);
