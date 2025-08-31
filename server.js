@@ -1528,10 +1528,25 @@ app.post('/search-by-line', async (req, res) => {
             const charBefore = matchIndex > 0 ? summary[matchIndex - 1] : ' ';
             const charAfter = matchIndex + line.length < summary.length ? summary[matchIndex + line.length] : ' ';
             
-            // Valid if preceded/followed by non-digit characters (word boundary)
-            const hasWordBoundary = !/\d/.test(charBefore) && !/\d/.test(charAfter);
+            // CRITICAL: The number must not be part of a larger number
+            // charBefore should not be a digit, and charAfter should not be a digit
+            const isNotPartOfLargerNumber = !/\d/.test(charBefore) && !/\d/.test(charAfter);
             
-            // Check if any positive pattern matches or has proper word boundaries
+            // Debug logging for line 21 specifically
+            if (line === '21' && summary.includes('210') && isNotPartOfLargerNumber) {
+              console.log(`  🔍 Checking line 21 at position ${matchIndex}:`);
+              console.log(`    Before: "${charBefore}" After: "${charAfter}"`);
+              console.log(`    Context: "${summary.substring(matchIndex - 5, matchIndex + 10)}"`);
+            }
+            
+            // If it's part of a larger number (like 21 in 210), skip it
+            if (!isNotPartOfLargerNumber) {
+              // This is part of a larger number, skip this occurrence
+              searchIndex = matchIndex + 1;
+              continue;
+            }
+            
+            // Check if any positive pattern matches
             let hasPositiveContext = false;
             for (const pattern of busLinePatterns) {
               if (pattern.test(beforeContext) || pattern.test(afterContext)) {
@@ -1540,7 +1555,12 @@ app.post('/search-by-line', async (req, res) => {
               }
             }
             
-            if (hasPositiveContext || hasWordBoundary) {
+            // Valid match if:
+            // 1. It's not part of a larger number (required)
+            // 2. AND it either has positive context OR stands alone as a clear number
+            if (isNotPartOfLargerNumber && (hasPositiveContext || 
+                (charBefore === ' ' || charBefore === ',' || charBefore === '.' || charBefore === '\n') &&
+                (charAfter === ' ' || charAfter === ',' || charAfter === '.' || charAfter === '\n'))) {
               validMatch = true;
               console.log(`  ✅ Valid bus line match for ${line} at position ${matchIndex}`);
               break;
