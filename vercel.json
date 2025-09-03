@@ -20,7 +20,7 @@
       "dest": "/public/$1"
     },
     {
-      "src": "/(api|exact-search|search|search-by-line|search-by-ticket|recommend|generate-official-response|health|data-sample|append-to-sheet|test-google-sheets|integrations|debug-vercel)(.*)",
+      "src": "/(api|exact-search|search|search-by-line|search-by-ticket|smart-search|recommend|generate-official-response|health|data-sample|append-to-sheet|test-google-sheets|integrations|debug-vercel)(.*)",
       "dest": "/server.js"
     },
     {
