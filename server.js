@@ -707,11 +707,36 @@ function extractLineNumbers(text) {
   return lineNumbers;
 }
 
+// Extract street names from text
+function extractStreetNames(text) {
+  const streets = [];
+  const streetPatterns = [
+    /רחוב\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+    /רח[\'׳]?\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+    /שדרות\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+    /שד[\'׳]?\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+    /דרך\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+    /כיכר\s+([א-ת\s]+?)(?=\s+(?:מספר|פינת|ליד|מול|,|\.|\d|$))/g,
+  ];
+  
+  streetPatterns.forEach(pattern => {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match[1] && match[1].trim().length > 2) {
+        streets.push(match[1].trim());
+      }
+    }
+  });
+  
+  return [...new Set(streets)]; // Remove duplicates
+}
+
 // Smart Query Analyzer - Extract components from user query
 function analyzeQuery(text) {
   const analysis = {
     busLines: [],
     locations: [],
+    streets: [],
     problemType: null,
     keywords: []
   };
@@ -719,14 +744,31 @@ function analyzeQuery(text) {
   // Extract bus lines
   analysis.busLines = extractLineNumbers(text);
   
-  // Extract locations (common Jerusalem neighborhoods and areas)
+  // Extract street names
+  analysis.streets = extractStreetNames(text);
+  
+  // Expanded Jerusalem locations - neighborhoods, areas, and major landmarks
   const locationPatterns = [
+    // Original neighborhoods
     'רמות', 'גילה', 'פסגת זאב', 'הר נוף', 'קרית יובל', 'תלפיות', 'בית וגן',
     'רמת שלמה', 'גאולה', 'מאה שערים', 'העיר העתיקה', 'ממילא', 'נחלאות',
     'קטמון', 'בקעה', 'ארנונה', 'רחביה', 'טלביה', 'ימין משה', 'משכנות שאננים',
     'עין כרם', 'מלחה', 'בית הכרם', 'בית שמש', 'מעלה אדומים', 'גבעת זאב',
     'הדסה', 'הר הצופים', 'גבעת רם', 'גבעת מרדכי', 'רוממה', 'סנהדריה',
-    'הר חוצבים', 'רמת אשכול', 'רמת דניה', 'אבו טור', 'ארמון הנציב', 'גבעת המבתר'
+    'הר חוצבים', 'רמת אשכול', 'רמת דניה', 'אבו טור', 'ארמון הנציב', 'גבעת המבתר',
+    // Additional neighborhoods
+    'פסגת זאב', 'נווה יעקב', 'פסגת אומר', 'שועפאט', 'בית חנינא', 'עיסאוויה',
+    'ואדי ג׳וז', 'שיח׳ ג׳ראח', 'סילוואן', 'ראס אל עמוד', 'ג׳בל מוכבר',
+    'צור באהר', 'אום טובא', 'בית צפאפה', 'שרפאת', 'בית סאחור', 'אום ליסון',
+    'עטרות', 'רמת שלמה', 'רמת אלון', 'רמת פולין',
+    // Major streets and areas
+    'יפו', 'בן יהודה', 'המלך ג׳ורג׳', 'הרצל', 'כנפי נשרים', 'גולדה מאיר',
+    'בר אילן', 'שמואל הנביא', 'הרב עובדיה יוסף', 'דרך חברון', 'פייר קניג',
+    'אגריפס', 'בצלאל', 'עזה', 'עמק רפאים', 'דרך בית לחם', 'הפלמ״ח',
+    // Landmarks and institutions
+    'הכותל', 'הכנסת', 'מרכז העיר', 'מחנה יהודה', 'שוק מחנה יהודה', 
+    'הקניון', 'מלחה', 'תחנה מרכזית', 'בנייני האומה', 'עיריית ירושלים',
+    'האוניברסיטה', 'האוניברסיטה העברית', 'בית החולים', 'שערי צדק', 'הדסה עין כרם'
   ];
   
   locationPatterns.forEach(location => {
@@ -807,6 +849,18 @@ function findSmartMatches(inquiryText, municipalData, maxResults = 10) {
       if (matchingLocations.length > 0) {
         score += 0.3 * (matchingLocations.length / queryAnalysis.locations.length);
         matchReasons.push(`מיקומים: ${matchingLocations.join(', ')}`);
+      }
+    }
+    
+    // Score for street name matches (35% weight - very important!)
+    if (queryAnalysis.streets.length > 0) {
+      const entryStreets = extractStreetNames(combinedText);
+      const matchingStreets = queryAnalysis.streets.filter(street => 
+        entryStreets.includes(street) || combinedText.includes(street)
+      );
+      if (matchingStreets.length > 0) {
+        score += 0.35 * (matchingStreets.length / queryAnalysis.streets.length);
+        matchReasons.push(`רחובות: ${matchingStreets.join(', ')}`);
       }
     }
     
@@ -964,11 +1018,18 @@ async function generateAllEmbeddings() {
   }
 }
 
-// Fallback text similarity function
+// Improved text similarity function for Hebrew
 function calculateTextSimilarity(text1, text2) {
   if (!text1 || !text2) return 0;
   
-  const normalize = (text) => text.toLowerCase().replace(/[^\u0590-\u05FF\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+  // Better normalization that preserves Hebrew and handles it properly
+  const normalize = (text) => {
+    return text
+      .toLowerCase()
+      .replace(/[^\u0590-\u05FF\u0041-\u005A\u0061-\u007A\u0030-\u0039\s]/g, ' ') // Keep Hebrew, English, numbers
+      .split(/\s+/)
+      .filter(w => w.length > 1);
+  };
   
   const words1 = normalize(text1);
   const words2 = normalize(text2);
@@ -982,7 +1043,22 @@ function calculateTextSimilarity(text1, text2) {
   const intersection = new Set([...set1].filter(x => set2.has(x)));
   const union = new Set([...set1, ...set2]);
   
-  return intersection.size / union.size;
+  // Also check for partial matches (important for street names)
+  let partialMatches = 0;
+  for (let word1 of set1) {
+    for (let word2 of set2) {
+      if (word1.length > 3 && word2.length > 3) {
+        if (word1.includes(word2) || word2.includes(word1)) {
+          partialMatches++;
+        }
+      }
+    }
+  }
+  
+  const jaccardScore = intersection.size / union.size;
+  const partialBoost = Math.min(0.2, partialMatches * 0.05);
+  
+  return Math.min(1.0, jaccardScore + partialBoost);
 }
 
 // Fallback text-based matching
@@ -1813,23 +1889,39 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    // Step 1: Find candidates using embeddings with lower threshold
+    // Step 1: Find candidates using multiple strategies with much lower thresholds
     let candidates = [];
     
     if (embeddingsReady) {
-      // Use semantic search with lower threshold for broader matches
-      candidates = await findSemanticMatches(inquiry_text, 0.55, 15); // Lower threshold, more results
+      // Use semantic search with MUCH lower threshold for broader matches
+      candidates = await findSemanticMatches(inquiry_text, 0.30, 25); // Much lower threshold, more results
       console.log(`📊 Found ${candidates.length} semantic candidates`);
     }
     
-    // If not enough semantic matches, add text-based matches
-    if (candidates.length < 10) {
-      const textMatches = findTextMatches(inquiry_text, 0.15, 15 - candidates.length);
+    // Always add text-based matches to ensure we don't miss anything
+    if (candidates.length < 25) {
+      const textMatches = findTextMatches(inquiry_text, 0.05, 30); // Very low threshold
       // Merge and deduplicate
       const existingIds = new Set(candidates.map(c => c.case_id));
       const newMatches = textMatches.filter(m => !existingIds.has(m.case_id));
-      candidates = [...candidates, ...newMatches];
+      candidates = [...candidates, ...newMatches].slice(0, 30); // Keep up to 30 total
       console.log(`📊 Added ${newMatches.length} text-based candidates (total: ${candidates.length})`);
+    }
+    
+    // If still not enough, add location-based search
+    const queryAnalysis = analyzeQuery(inquiry_text);
+    if (candidates.length < 20 && (queryAnalysis.locations.length > 0 || queryAnalysis.streets.length > 0)) {
+      console.log('🗺️ Adding location-based search...');
+      const locationMatches = municipalData.filter(entry => {
+        const entryText = `${entry.inquiry_text} ${entry.response_text}`.toLowerCase();
+        return queryAnalysis.locations.some(loc => entryText.includes(loc)) ||
+               queryAnalysis.streets.some(street => entryText.includes(street));
+      }).slice(0, 10);
+      
+      const existingIds = new Set(candidates.map(c => c.case_id));
+      const newLocationMatches = locationMatches.filter(m => !existingIds.has(m.case_id));
+      candidates = [...candidates, ...newLocationMatches];
+      console.log(`📊 Added ${newLocationMatches.length} location-based candidates (total: ${candidates.length})`);
     }
 
     if (candidates.length === 0) {
@@ -1847,8 +1939,8 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    // Step 2: Prepare candidates for GPT-4 validation
-    const candidatesForValidation = candidates.slice(0, 10).map((candidate, idx) => ({
+    // Step 2: Prepare candidates for GPT-4 validation - send more candidates!
+    const candidatesForValidation = candidates.slice(0, 20).map((candidate, idx) => ({
       id: idx + 1,
       case_id: candidate.case_id,
       inquiry: candidate.inquiry_text,
@@ -1872,10 +1964,16 @@ ${candidatesForValidation.map(c => `
 ---`).join('\n')}
 
 משימתך:
-1. זהה אילו תשובות (אם בכלל) באמת עונות על השאלה של המשתמש, גם אם הניסוח שונה לחלוטין
-2. דרג את הרלוונטיות של כל תשובה (0-10)
-3. צור תשובה מקיפה המשלבת את המידע הרלוונטי ביותר
-4. ציין את מספרי השורות של המקורות שהשתמשת בהם
+1. זהה אילו תשובות עונות על השאלה - כולל תשובות חלקיות או קשורות
+2. תן משקל גבוה לתשובות שמזכירות את אותם מיקומים, רחובות או קווי אוטובוס
+3. אם תשובה מכילה מידע שיכול לעזור למשתמש - כלול אותה גם אם היא לא מושלמת
+4. דרג רלוונטיות 0-10 (היה נדיב - 5+ לכל דבר שקשור חלקית)
+5. שלב מידע ממספר מקורות ליצירת תשובה מקיפה
+
+חשוב מאוד:
+- אם השאלה מזכירה רחוב או מיקום, כל תשובה שמזכירה אותו מיקום רלוונטית!
+- אם אתה מסופק אם תשובה רלוונטית - כלול אותה
+- עדיף לתת יותר מידע מאשר פחות
 
 החזר תשובה בפורמט JSON:
 {
@@ -1911,7 +2009,7 @@ ${candidatesForValidation.map(c => `
       console.log(`✅ GPT-4 validation complete. Confidence: ${validationResult.confidence}`);
       console.log(`📝 Used sources from rows: ${validationResult.source_rows?.join(', ') || 'none'}`);
 
-      // Prepare sources for response
+      // Prepare sources for response - include more sources with lower threshold
       const sources = validationResult.relevant_answers?.map(ra => {
         const candidate = candidatesForValidation.find(c => c.id === ra.id);
         return {
@@ -1920,7 +2018,7 @@ ${candidatesForValidation.map(c => `
           relevance: ra.relevance,
           reason: ra.reason
         };
-      }).filter(s => s.relevance >= 7) || [];
+      }).filter(s => s.relevance >= 5) || []; // Lower threshold - include partially relevant
 
       res.json({
         success: true,
