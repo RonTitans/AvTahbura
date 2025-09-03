@@ -160,6 +160,7 @@ app.use((req, res, next) => {
       req.path === '/exact-search' ||
       req.path === '/search-by-line' ||
       req.path === '/search-by-ticket' ||
+      req.path === '/smart-search' ||
       req.path === '/generate-official-response' ||
       req.path.endsWith('.css') || 
       req.path.endsWith('.js') || 
@@ -562,10 +563,13 @@ async function loadDataFromSheets() {
     
     // Generate embeddings for all loaded data if OpenAI is available
     if (municipalData.length > 0 && openaiAvailable) {
-      // Temporarily skip embeddings generation to allow server to start
-      console.log('⚠️ Skipping embeddings generation for faster startup - will use text-based search');
-      embeddingsReady = false;
-      // await generateAllEmbeddings();
+      // Generate embeddings in background to not block server startup
+      console.log('🚀 Starting embeddings generation in background...');
+      generateAllEmbeddings().then(() => {
+        console.log('✅ Background embeddings generation complete');
+      }).catch(err => {
+        console.error('❌ Background embeddings generation failed:', err);
+      });
     } else if (!openaiAvailable) {
       console.log('⚠️ Running without embeddings - will use fallback search if needed');
     }
@@ -899,7 +903,7 @@ function cleanHistoricalResponse(response) {
   return cleaned;
 }
 
-// Generate embeddings for all municipal data
+// Generate embeddings for all municipal data with optimizations
 async function generateAllEmbeddings() {
   if (!openaiAvailable) {
     console.log('⚠️ OpenAI not available - skipping embeddings generation');
@@ -911,19 +915,44 @@ async function generateAllEmbeddings() {
   embeddingsReady = false;
   
   try {
-    for (let i = 0; i < municipalData.length; i++) {
-      const entry = municipalData[i];
-      if (!entry.embedding) {
-        const combinedText = `${entry.inquiry_text} ${entry.response_text}`;
-        entry.embedding = await generateEmbedding(combinedText);
-        
-        // Progress logging
-        if ((i + 1) % 100 === 0 || i === municipalData.length - 1) {
-          console.log(`📊 Embeddings progress: ${i + 1}/${municipalData.length}`);
+    const BATCH_SIZE = 20; // Process in batches for better efficiency
+    let processedCount = 0;
+    
+    for (let i = 0; i < municipalData.length; i += BATCH_SIZE) {
+      const batch = municipalData.slice(i, Math.min(i + BATCH_SIZE, municipalData.length));
+      
+      // Process batch in parallel
+      const embeddingPromises = batch.map(async (entry) => {
+        if (!entry.embedding) {
+          try {
+            // Create separate embeddings for inquiry and response
+            const inquiryEmbedding = entry.inquiry_text ? 
+              await generateEmbedding(entry.inquiry_text) : null;
+            const responseEmbedding = entry.response_text ? 
+              await generateEmbedding(entry.response_text) : null;
+            
+            // Store both embeddings for better matching
+            entry.inquiry_embedding = inquiryEmbedding;
+            entry.response_embedding = responseEmbedding;
+            
+            // Also create combined embedding for backward compatibility
+            const combinedText = `${entry.inquiry_text} ${entry.response_text}`;
+            entry.embedding = await generateEmbedding(combinedText);
+          } catch (err) {
+            console.error(`Failed to generate embedding for entry ${entry.case_id}:`, err.message);
+          }
         }
-        
-        // Rate limiting - wait 50ms between requests
-        await new Promise(resolve => setTimeout(resolve, 50));
+      });
+      
+      await Promise.all(embeddingPromises);
+      processedCount += batch.length;
+      
+      // Progress logging
+      console.log(`📊 Embeddings progress: ${processedCount}/${municipalData.length} (${Math.round(processedCount * 100 / municipalData.length)}%)`);
+      
+      // Rate limiting between batches
+      if (i + BATCH_SIZE < municipalData.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
     
@@ -1756,6 +1785,189 @@ app.post('/search-by-ticket', async (req, res) => {
       success: false,
       error: 'Internal server error',
       entries: []
+    });
+  }
+});
+
+// NEW: Smart Search with GPT-4 Validation endpoint
+app.post('/smart-search', async (req, res) => {
+  try {
+    const { inquiry_text } = req.body;
+    
+    if (!inquiry_text) {
+      return res.status(400).json({ 
+        error: 'Missing inquiry_text parameter',
+        success: false 
+      });
+    }
+
+    console.log(`\n🤖 Smart Search initiated for: "${inquiry_text}"`);
+
+    // Check if OpenAI is available
+    if (!openaiAvailable || !openai) {
+      console.log('❌ OpenAI not available for smart search');
+      return res.status(503).json({
+        error: 'Smart search requires OpenAI to be configured',
+        fallback_suggestion: 'Please use regular search mode',
+        success: false
+      });
+    }
+
+    // Step 1: Find candidates using embeddings with lower threshold
+    let candidates = [];
+    
+    if (embeddingsReady) {
+      // Use semantic search with lower threshold for broader matches
+      candidates = await findSemanticMatches(inquiry_text, 0.55, 15); // Lower threshold, more results
+      console.log(`📊 Found ${candidates.length} semantic candidates`);
+    }
+    
+    // If not enough semantic matches, add text-based matches
+    if (candidates.length < 10) {
+      const textMatches = findTextMatches(inquiry_text, 0.15, 15 - candidates.length);
+      // Merge and deduplicate
+      const existingIds = new Set(candidates.map(c => c.case_id));
+      const newMatches = textMatches.filter(m => !existingIds.has(m.case_id));
+      candidates = [...candidates, ...newMatches];
+      console.log(`📊 Added ${newMatches.length} text-based candidates (total: ${candidates.length})`);
+    }
+
+    if (candidates.length === 0) {
+      console.log('❌ No candidates found for validation');
+      // Generate a response without historical data
+      const response = await generateFinalResponse(inquiry_text, null);
+      return res.json({
+        success: true,
+        inquiry: inquiry_text,
+        answer: response,
+        confidence: 0.3,
+        sources: [],
+        method: 'gpt_generated_no_sources',
+        message: 'לא נמצאו תשובות דומות במערכת, התשובה נוצרה על בסיס ידע כללי'
+      });
+    }
+
+    // Step 2: Prepare candidates for GPT-4 validation
+    const candidatesForValidation = candidates.slice(0, 10).map((candidate, idx) => ({
+      id: idx + 1,
+      case_id: candidate.case_id,
+      inquiry: candidate.inquiry_text,
+      response: candidate.response_text,
+      similarity_score: candidate.similarity || candidate.smartScore || 0,
+      row_number: candidate.row_number
+    }));
+
+    // Step 3: Send to GPT-4 for validation and response generation
+    const validationPrompt = `אתה מערכת חכמה לניתוח שאלות ותשובות בנושא תחבורה ציבורית בירושלים.
+
+שאלת המשתמש: "${inquiry_text}"
+
+להלן רשימת תשובות אפשריות מהמערכת:
+
+${candidatesForValidation.map(c => `
+[${c.id}] מזהה: ${c.case_id} (שורה ${c.row_number})
+שאלה מקורית: ${c.inquiry}
+תשובה: ${c.response}
+ציון דמיון: ${c.similarity_score.toFixed(2)}
+---`).join('\n')}
+
+משימתך:
+1. זהה אילו תשובות (אם בכלל) באמת עונות על השאלה של המשתמש, גם אם הניסוח שונה לחלוטין
+2. דרג את הרלוונטיות של כל תשובה (0-10)
+3. צור תשובה מקיפה המשלבת את המידע הרלוונטי ביותר
+4. ציין את מספרי השורות של המקורות שהשתמשת בהם
+
+החזר תשובה בפורמט JSON:
+{
+  "relevant_answers": [
+    {"id": 1, "relevance": 9, "reason": "התשובה מכילה מידע על..."},
+    ...
+  ],
+  "final_answer": "התשובה המלאה והמקיפה כאן...",
+  "source_rows": [מספרי השורות],
+  "confidence": 0.95
+}`;
+
+    try {
+      const gptResponse = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          { 
+            role: "system", 
+            content: "אתה עוזר מומחה בתחבורה ציבורית בירושלים. תן תשובות מדויקות ומבוססות על המידע שניתן לך. החזר תמיד תשובה בפורמט JSON תקין."
+          },
+          { 
+            role: "user", 
+            content: validationPrompt 
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }
+      });
+
+      const validationResult = JSON.parse(gptResponse.choices[0].message.content);
+      
+      console.log(`✅ GPT-4 validation complete. Confidence: ${validationResult.confidence}`);
+      console.log(`📝 Used sources from rows: ${validationResult.source_rows?.join(', ') || 'none'}`);
+
+      // Prepare sources for response
+      const sources = validationResult.relevant_answers?.map(ra => {
+        const candidate = candidatesForValidation.find(c => c.id === ra.id);
+        return {
+          case_id: candidate?.case_id,
+          row_number: candidate?.row_number,
+          relevance: ra.relevance,
+          reason: ra.reason
+        };
+      }).filter(s => s.relevance >= 7) || [];
+
+      res.json({
+        success: true,
+        inquiry: inquiry_text,
+        answer: validationResult.final_answer,
+        confidence: validationResult.confidence || 0.8,
+        sources: sources,
+        source_rows: validationResult.source_rows || [],
+        method: 'smart_search_gpt4_validated',
+        candidates_evaluated: candidatesForValidation.length
+      });
+
+    } catch (gptError) {
+      console.error('❌ GPT-4 validation failed:', gptError);
+      
+      // Fallback to GPT-3.5 if GPT-4 fails
+      try {
+        const fallbackResponse = await generateFinalResponse(inquiry_text, candidates[0]?.response_text);
+        res.json({
+          success: true,
+          inquiry: inquiry_text,
+          answer: fallbackResponse,
+          confidence: 0.6,
+          sources: candidates.slice(0, 3).map(c => ({
+            case_id: c.case_id,
+            row_number: c.row_number,
+            relevance: c.similarity || 0
+          })),
+          method: 'fallback_gpt35',
+          message: 'נעשה שימוש במודל חלופי'
+        });
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to generate response',
+          message: 'שגיאה ביצירת תשובה'
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error in /smart-search endpoint:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error',
+      message: error.message
     });
   }
 });

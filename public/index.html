@@ -506,6 +506,32 @@
                     ">
                         לפי מזהה פנייה
                     </button>
+                    <button type="button" class="mode-btn" data-mode="smart" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                        position: relative;
+                    ">
+                        🤖 חיפוש חכם
+                        <span style="
+                            position: absolute;
+                            top: 4px;
+                            right: 4px;
+                            background: #f56565;
+                            color: white;
+                            font-size: 9px;
+                            padding: 1px 4px;
+                            border-radius: 8px;
+                            font-weight: 600;
+                        ">חדש</span>
+                    </button>
                 </div>
                 
                 <textarea 
@@ -588,7 +614,8 @@
             const placeholders = {
                 regular: 'לדוגמה: קו 408 שינוי מסלול בית שמש',
                 precise: 'לדוגמה: קו 630',
-                ticket: 'לדוגמה: CAS-665326-T5D8X2'
+                ticket: 'לדוגמה: CAS-665326-T5D8X2',
+                smart: 'שאל שאלה כלשהי - המערכת תמצא תשובות רלוונטיות גם אם הן נכתבו אחרת'
             };
             inquiryInput.placeholder = placeholders[currentMode];
         }
@@ -618,6 +645,13 @@
                     modeTip.style.display = 'block';
                     searchBtn.disabled = true;
                 }
+            } else if (currentMode === 'smart') {
+                // Smart search accepts any input, just need minimum length
+                if (input.length < 3) {
+                    modeTip.textContent = 'נא להזין לפחות 3 תווים לחיפוש חכם';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
             }
         }
         
@@ -629,7 +663,7 @@
         
         // Load saved mode from localStorage
         const savedMode = localStorage.getItem('searchMode');
-        if (savedMode && ['regular', 'precise', 'ticket'].includes(savedMode)) {
+        if (savedMode && ['regular', 'precise', 'ticket', 'smart'].includes(savedMode)) {
             currentMode = savedMode;
         }
         // Always set the active mode on load
@@ -710,6 +744,12 @@
                         ticketId: ticketId
                     };
                     searchType = 'לפי מזהה פנייה: ' + ticketId;
+                } else if (currentMode === 'smart') {
+                    endpoint = '/smart-search';
+                    requestBody = {
+                        inquiry_text: input
+                    };
+                    searchType = 'חיפוש חכם עם GPT-4';
                 }
                 
                 const response = await fetch(endpoint, {
@@ -740,6 +780,8 @@
                     displayPreciseResults(data, searchType);
                 } else if (currentMode === 'ticket') {
                     displayTicketResults(data, searchType);
+                } else if (currentMode === 'smart') {
+                    displaySmartResults(data, searchType);
                 }
                 
             } catch (error) {
@@ -1355,6 +1397,125 @@
                 `;
             }
             
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+        
+        function displaySmartResults(data, searchType) {
+            let html = `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <span style="font-size: 32px;">🤖</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 20px;">חיפוש חכם עם GPT-4</h3>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                                המערכת ניתחה ${data.candidates_evaluated || 10} תשובות אפשריות ומצאה את הרלוונטיות ביותר
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 20px; font-size: 14px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span>🎯</span>
+                            <span>רמת ביטחון: ${Math.round((data.confidence || 0.8) * 100)}%</span>
+                        </div>
+                        ${data.source_rows && data.source_rows.length > 0 ? `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>📍</span>
+                                <span>מקורות: שורות ${data.source_rows.join(', ')}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Display the inquiry
+            html += `
+                <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 20px;">💬</span>
+                        <h4 style="margin: 0; color: #2d3748;">השאלה שלך:</h4>
+                    </div>
+                    <div style="color: #4a5568; font-size: 16px; line-height: 1.6;">
+                        ${escapeHtml(data.inquiry)}
+                    </div>
+                </div>
+            `;
+
+            // Display the AI answer
+            html += `
+                <div style="background: #f0fdf4; padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #48bb78;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <span style="font-size: 24px;">✨</span>
+                        <h4 style="margin: 0; color: #22543d; font-size: 18px;">התשובה המשולבת:</h4>
+                    </div>
+                    <div style="color: #2d3748; font-size: 16px; line-height: 1.8; white-space: pre-wrap;">
+                        ${escapeHtml(data.answer || data.final_answer || 'לא נמצאה תשובה')}
+                    </div>
+                </div>
+            `;
+
+            // Display relevant sources if available
+            if (data.sources && data.sources.length > 0) {
+                html += `
+                    <div style="background: #f7fafc; padding: 20px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0; color: #2d3748; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">📚</span>
+                            מקורות רלוונטיים שנמצאו:
+                        </h4>
+                        <div style="display: grid; gap: 12px;">
+                `;
+                
+                data.sources.forEach((source, idx) => {
+                    html += `
+                        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <span style="
+                                    background: #667eea; 
+                                    color: white; 
+                                    padding: 2px 8px; 
+                                    border-radius: 4px; 
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    רלוונטיות: ${source.relevance || 0}/10
+                                </span>
+                                <span style="font-size: 12px; color: #718096;">
+                                    שורה ${source.row_number || 'לא ידוע'} | ${source.case_id || ''}
+                                </span>
+                            </div>
+                            ${source.reason ? `
+                                <div style="color: #4a5568; font-size: 14px; font-style: italic;">
+                                    "${escapeHtml(source.reason)}"
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Add method indicator
+            if (data.method) {
+                html += `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <span style="
+                            font-size: 11px; 
+                            color: #718096; 
+                            background: #edf2f7; 
+                            padding: 4px 12px; 
+                            border-radius: 12px;
+                            display: inline-block;
+                        ">
+                            שיטת חיפוש: ${data.method}
+                        </span>
+                    </div>
+                `;
+            }
+
             results.innerHTML = html;
             results.style.display = 'block';
         }
