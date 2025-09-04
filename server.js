@@ -1889,38 +1889,38 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    // Step 1: Find candidates using multiple strategies with much lower thresholds
+    // Step 1: Find candidates - OPTIMIZED for performance
     let candidates = [];
     
     if (embeddingsReady) {
-      // Use semantic search with MUCH lower threshold for broader matches
-      candidates = await findSemanticMatches(inquiry_text, 0.30, 25); // Much lower threshold, more results
+      // Use semantic search with higher threshold for quality matches
+      candidates = await findSemanticMatches(inquiry_text, 0.35, 8); // Higher threshold, fewer but better results
       console.log(`📊 Found ${candidates.length} semantic candidates`);
     }
     
-    // Always add text-based matches to ensure we don't miss anything
-    if (candidates.length < 25) {
-      const textMatches = findTextMatches(inquiry_text, 0.05, 30); // Very low threshold
+    // Add text-based matches if needed - with better threshold
+    if (candidates.length < 8) {
+      const textMatches = findTextMatches(inquiry_text, 0.15, 10); // Higher threshold for better quality
       // Merge and deduplicate
       const existingIds = new Set(candidates.map(c => c.case_id));
       const newMatches = textMatches.filter(m => !existingIds.has(m.case_id));
-      candidates = [...candidates, ...newMatches].slice(0, 30); // Keep up to 30 total
+      candidates = [...candidates, ...newMatches].slice(0, 10); // Keep max 10 total
       console.log(`📊 Added ${newMatches.length} text-based candidates (total: ${candidates.length})`);
     }
     
-    // If still not enough, add location-based search
+    // Add location-based search only if really needed
     const queryAnalysis = analyzeQuery(inquiry_text);
-    if (candidates.length < 20 && (queryAnalysis.locations.length > 0 || queryAnalysis.streets.length > 0)) {
+    if (candidates.length < 5 && (queryAnalysis.locations.length > 0 || queryAnalysis.streets.length > 0)) {
       console.log('🗺️ Adding location-based search...');
       const locationMatches = municipalData.filter(entry => {
         const entryText = `${entry.inquiry_text} ${entry.response_text}`.toLowerCase();
         return queryAnalysis.locations.some(loc => entryText.includes(loc)) ||
                queryAnalysis.streets.some(street => entryText.includes(street));
-      }).slice(0, 10);
+      }).slice(0, 5); // Only top 5
       
       const existingIds = new Set(candidates.map(c => c.case_id));
       const newLocationMatches = locationMatches.filter(m => !existingIds.has(m.case_id));
-      candidates = [...candidates, ...newLocationMatches];
+      candidates = [...candidates, ...newLocationMatches].slice(0, 10); // Keep max 10
       console.log(`📊 Added ${newLocationMatches.length} location-based candidates (total: ${candidates.length})`);
     }
 
@@ -1939,12 +1939,13 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    // Step 2: Prepare candidates for GPT-4 validation - send more candidates!
-    const candidatesForValidation = candidates.slice(0, 20).map((candidate, idx) => ({
+    // Step 2: Prepare candidates for GPT-4 validation - OPTIMIZED: only top 5
+    const candidatesForValidation = candidates.slice(0, 5).map((candidate, idx) => ({
       id: idx + 1,
       case_id: candidate.case_id,
-      inquiry: candidate.inquiry_text,
-      response: candidate.response_text,
+      // Truncate text to reduce token usage and speed up processing
+      inquiry: candidate.inquiry_text?.substring(0, 300) || '',
+      response: candidate.response_text?.substring(0, 400) || '',
       similarity_score: candidate.similarity || candidate.smartScore || 0,
       row_number: candidate.row_number
     }));
@@ -1987,8 +1988,13 @@ ${candidatesForValidation.map(c => `
 }`;
 
     try {
-      const gptResponse = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+      // Add timeout wrapper for GPT-4 call
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('GPT-4 timeout')), 15000) // 15 second timeout
+      );
+      
+      const gptPromise = openai.chat.completions.create({
+        model: "gpt-4-turbo-preview", // Keeping GPT-4 as requested
         messages: [
           { 
             role: "system", 
@@ -2000,9 +2006,11 @@ ${candidatesForValidation.map(c => `
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 1200, // Reduced from 2000 for faster response
         response_format: { type: "json_object" }
       });
+      
+      const gptResponse = await Promise.race([gptPromise, timeoutPromise]);
 
       const validationResult = JSON.parse(gptResponse.choices[0].message.content);
       
@@ -2032,30 +2040,36 @@ ${candidatesForValidation.map(c => `
       });
 
     } catch (gptError) {
-      console.error('❌ GPT-4 validation failed:', gptError);
+      const isTimeout = gptError.message === 'GPT-4 timeout';
+      console.error(`❌ GPT-4 validation failed${isTimeout ? ' (timeout)' : ''}:`, gptError.message);
       
-      // Fallback to GPT-3.5 if GPT-4 fails
-      try {
-        const fallbackResponse = await generateFinalResponse(inquiry_text, candidates[0]?.response_text);
+      // Return best candidates without GPT enhancement if timeout/error
+      if (candidates.length > 0) {
+        // Use the best candidate as the answer
+        const bestCandidate = candidates[0];
         res.json({
           success: true,
           inquiry: inquiry_text,
-          answer: fallbackResponse,
-          confidence: 0.6,
+          answer: bestCandidate.response_text,
+          confidence: 0.7,
           sources: candidates.slice(0, 3).map(c => ({
             case_id: c.case_id,
             row_number: c.row_number,
-            relevance: c.similarity || 0
+            relevance: (c.similarity || c.smartScore || 0).toFixed(2),
+            reason: c.matchReasons || ''
           })),
-          method: 'fallback_gpt35',
-          message: 'נעשה שימוש במודל חלופי'
+          method: isTimeout ? 'timeout_fallback' : 'error_fallback',
+          message: isTimeout ? 
+            'החיפוש החכם נקטע - מציג תוצאות ללא עיבוד נוסף' : 
+            'שגיאה בעיבוד - מציג תוצאות מקוריות',
+          candidates_evaluated: candidates.length
         });
-      } catch (fallbackError) {
-        console.error('❌ Fallback also failed:', fallbackError);
+      } else {
+        // No candidates found
         res.status(500).json({
           success: false,
           error: 'Failed to generate response',
-          message: 'שגיאה ביצירת תשובה'
+          message: 'שגיאה ביצירת תשובה - אנא נסה שנית'
         });
       }
     }
@@ -2081,6 +2095,40 @@ app.get('/health', (req, res) => {
     search_type: embeddingsReady ? 'semantic_embeddings' : 'text_similarity',
     gpt_cache_size: responseCache.cache.size,
     active_sessions: sessions.size
+  });
+});
+
+// Debug endpoint to check system status (embeddings, OpenAI, etc.)
+app.get('/api/debug/status', (req, res) => {
+  const embeddingsCount = municipalData.filter(d => d.embedding).length;
+  const inquiryEmbeddingsCount = municipalData.filter(d => d.inquiry_embedding).length;
+  const responseEmbeddingsCount = municipalData.filter(d => d.response_embedding).length;
+  
+  res.json({
+    system: {
+      openaiAvailable,
+      embeddingsReady,
+      dataLoadedSuccessfully,
+      lastRefresh: lastRefreshTime
+    },
+    data: {
+      totalRecords: municipalData.length,
+      recordsWithEmbedding: embeddingsCount,
+      recordsWithInquiryEmbedding: inquiryEmbeddingsCount,
+      recordsWithResponseEmbedding: responseEmbeddingsCount,
+      embeddingCoverage: municipalData.length > 0 ? 
+        `${Math.round((embeddingsCount / municipalData.length) * 100)}%` : '0%'
+    },
+    performance: {
+      responseCacheSize: responseCache ? responseCache.cache.size : 0,
+      activeSessions: sessions.size,
+      searchMethod: embeddingsReady ? 'semantic_embeddings' : 'text_similarity_fallback'
+    },
+    config: {
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+      hasGoogleCredentials: !!process.env.GOOGLE_CREDENTIALS_JSON,
+      hasSpreadsheetId: !!process.env.SPREADSHEET_ID
+    }
   });
 });
 
@@ -2843,16 +2891,44 @@ async function startServer() {
   // Initial data load
   await loadDataFromSheets();
   
+  // Generate embeddings if OpenAI is available and data is loaded
+  if (openaiAvailable && municipalData.length > 0) {
+    console.log('🧠 Starting embeddings generation...');
+    await generateAllEmbeddings();
+    
+    // Retry once if embeddings failed
+    if (!embeddingsReady && openaiAvailable) {
+      console.log('⚠️ Embeddings generation failed, retrying once...');
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      await generateAllEmbeddings();
+    }
+    
+    if (embeddingsReady) {
+      console.log('✅ Embeddings generation completed successfully');
+    } else {
+      console.log('❌ Embeddings generation failed - falling back to text search');
+    }
+  } else {
+    console.log('⚠️ Skipping embeddings generation:', {
+      openaiAvailable,
+      dataCount: municipalData.length
+    });
+  }
+  
   // Set up automatic refresh every 5 minutes
-  setInterval(loadDataFromSheets, 5 * 60 * 1000);
+  setInterval(async () => {
+    await loadDataFromSheets();
+    // Don't regenerate embeddings on every refresh to avoid costs
+  }, 5 * 60 * 1000);
   
   app.listen(PORT, () => {
     console.log(`\n🚀 Municipal Inquiry System running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔍 Data sample: http://localhost:${PORT}/data-sample`);
+    console.log(`🔍 Debug status: http://localhost:${PORT}/api/debug/status`);
     console.log(`💾 Records loaded: ${municipalData.length}`);
     console.log(`✅ Data loaded successfully: ${dataLoadedSuccessfully}`);
     console.log(`🧠 Embeddings ready: ${embeddingsReady}`);
+    console.log(`🤖 OpenAI available: ${openaiAvailable}`);
   });
 }
 
