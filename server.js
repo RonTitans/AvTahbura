@@ -2960,8 +2960,12 @@ async function startServer() {
 if (process.env.VERCEL) {
   // On Vercel, initialize data but don't listen on port
   console.log('🚀 Running on Vercel, initializing data...');
-  await loadDataFromSheets();
-  await generateEmbeddings();
+  loadDataFromSheets().then(() => {
+    generateEmbeddings();
+    console.log('✅ Vercel initialization complete');
+  }).catch(err => {
+    console.error('❌ Vercel initialization error:', err);
+  });
 } else {
   // Start server locally
   startServer().catch(console.error);
