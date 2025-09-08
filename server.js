@@ -585,10 +585,14 @@ async function loadDataFromSheets() {
   } catch (error) {
     console.error('❌ Error loading data from Google Sheets:', error);
     dataLoadedSuccessfully = false;
-    
-    // Load fallback test data with more entries for better testing
-    console.log('🔄 Loading fallback test data...');
-    municipalData = [
+    loadFallbackData();
+  }
+}
+
+// Load fallback data when Google Sheets fails
+function loadFallbackData() {
+  console.log('🔄 Loading fallback test data...');
+  municipalData = [
       {
         case_id: 'CAS-BEIT-SHEMESH-1',
         inquiry_text: 'הוספת קו חדש בית שמש - בית שמש הוספת קו חדש הערות הפונה: אני גרה ברמת אברהם בבית שמש ועובדת ברמה ג\'2 בבית שמש ונאלצת לסע ב2 אוטובוסים לעבודה',
@@ -637,11 +641,11 @@ async function loadDataFromSheets() {
         response_text: 'שלום רב, תודה על הפנייה. נושא הנגישות חשוב לנו והועבר לטיפול האגף הרלוונטי. בברכה',
         has_official_response: true
       }
-    ];
-    
-    lastRefreshTime = new Date();
-    console.log(`✅ Loaded ${municipalData.length} fallback entries`);
-  }
+  ];
+  
+  lastRefreshTime = new Date();
+  dataLoadedSuccessfully = true; // Mark as successful for fallback
+  console.log(`✅ Loaded ${municipalData.length} fallback entries`);
 }
 
 // Check if text contains official response keywords
@@ -2971,7 +2975,8 @@ async function initialize() {
     } catch (err) {
       console.error('❌ Vercel initialization error:', err);
       // Load fallback data if Google Sheets fails
-      municipalData = []; // Will use fallback in endpoints
+      loadFallbackData();
+      console.log(`📊 Loaded ${municipalData.length} fallback records for Vercel`);
     }
   } else {
     // Start server locally
