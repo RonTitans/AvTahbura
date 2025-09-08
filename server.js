@@ -2959,18 +2959,33 @@ async function startServer() {
 }
 
 // Initialize data and start server
+async function initialize() {
+  if (process.env.VERCEL) {
+    // On Vercel, initialize data but don't listen on port
+    console.log('🚀 Running on Vercel, initializing data...');
+    try {
+      await loadDataFromSheets();
+      await generateEmbeddings();
+      console.log('✅ Vercel initialization complete');
+      console.log(`📊 Loaded ${municipalData.length} records`);
+    } catch (err) {
+      console.error('❌ Vercel initialization error:', err);
+      // Load fallback data if Google Sheets fails
+      municipalData = []; // Will use fallback in endpoints
+    }
+  } else {
+    // Start server locally
+    await startServer();
+  }
+}
+
+// Initialize and export
 if (process.env.VERCEL) {
-  // On Vercel, initialize data but don't listen on port
-  console.log('🚀 Running on Vercel, initializing data...');
-  loadDataFromSheets().then(() => {
-    generateEmbeddings();
-    console.log('✅ Vercel initialization complete');
-  }).catch(err => {
-    console.error('❌ Vercel initialization error:', err);
-  });
+  // For Vercel, we need to initialize synchronously before first request
+  await initialize();
 } else {
-  // Start server locally
-  startServer().catch(console.error);
+  // For local development, initialize asynchronously
+  initialize().catch(console.error);
 }
 
 // Export for Vercel
