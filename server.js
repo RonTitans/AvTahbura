@@ -1866,7 +1866,7 @@ app.post('/search-by-ticket', async (req, res) => {
 });
 
 // NEW: Smart Search with GPT-4 Validation endpoint
-// Smart Search endpoint - now using RAG system
+// Smart Search endpoint - REPLACED WITH RAG SYSTEM
 app.post('/smart-search', async (req, res) => {
   try {
     const { inquiry_text } = req.body;
@@ -1878,209 +1878,100 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    console.log(`\n🤖 Smart Search initiated for: "${inquiry_text}"`);
+    console.log(`\n🎯 RAG Search initiated for: "${inquiry_text}"`);
 
-    // Check if OpenAI is available
-    if (!openaiAvailable || !openai) {
-      console.log('❌ OpenAI not available for smart search');
-      return res.status(503).json({
-        error: 'Smart search requires OpenAI to be configured',
-        fallback_suggestion: 'Please use regular search mode',
-        success: false
-      });
-    }
-
-    // Step 1: Find candidates - OPTIMIZED for performance
-    let candidates = [];
+    // Import RAG modules
+    const { normalizeHebrew, extractBusLines } = await import('./rag/core/normalizer.js');
+    const { analyzeQuery } = await import('./rag/core/analyzer.js');
+    const { hybridRetrieval } = await import('./rag/core/retriever.js');
+    const { shouldUseLLM } = await import('./rag/llm/gating.js');
+    const { synthesizeResponse } = await import('./rag/llm/synthesis.js');
     
-    if (embeddingsReady) {
-      // Use semantic search with higher threshold for quality matches
-      candidates = await findSemanticMatches(inquiry_text, 0.35, 8); // Higher threshold, fewer but better results
-      console.log(`📊 Found ${candidates.length} semantic candidates`);
-    }
+    // Step 1: Analyze query
+    const analysis = analyzeQuery(inquiry_text);
+    console.log('📝 Query analysis:', {
+      lines: analysis.busLines,
+      locations: analysis.locations,
+      type: analysis.queryType
+    });
     
-    // Add text-based matches if needed - with better threshold
-    if (candidates.length < 8) {
-      const textMatches = findTextMatches(inquiry_text, 0.15, 10); // Higher threshold for better quality
-      // Merge and deduplicate
-      const existingIds = new Set(candidates.map(c => c.case_id));
-      const newMatches = textMatches.filter(m => !existingIds.has(m.case_id));
-      candidates = [...candidates, ...newMatches].slice(0, 10); // Keep max 10 total
-      console.log(`📊 Added ${newMatches.length} text-based candidates (total: ${candidates.length})`);
-    }
+    // Step 2: Hybrid retrieval
+    const retrievalResults = await hybridRetrieval(inquiry_text, municipalData, {
+      openai: openaiAvailable ? openai : null,
+      embeddings: embeddingsReady ? embeddings : null
+    });
     
-    // Add location-based search only if really needed
-    const queryAnalysis = analyzeQuery(inquiry_text);
-    if (candidates.length < 5 && (queryAnalysis.locations.length > 0 || queryAnalysis.streets.length > 0)) {
-      console.log('🗺️ Adding location-based search...');
-      const locationMatches = municipalData.filter(entry => {
-        const entryText = `${entry.inquiry_text} ${entry.response_text}`.toLowerCase();
-        return queryAnalysis.locations.some(loc => entryText.includes(loc)) ||
-               queryAnalysis.streets.some(street => entryText.includes(street));
-      }).slice(0, 5); // Only top 5
-      
-      const existingIds = new Set(candidates.map(c => c.case_id));
-      const newLocationMatches = locationMatches.filter(m => !existingIds.has(m.case_id));
-      candidates = [...candidates, ...newLocationMatches].slice(0, 10); // Keep max 10
-      console.log(`📊 Added ${newLocationMatches.length} location-based candidates (total: ${candidates.length})`);
-    }
-
-    if (candidates.length === 0) {
-      console.log('❌ No candidates found for validation');
-      // Generate a response without historical data
-      const response = await generateFinalResponse(inquiry_text, null);
+    console.log(`📊 Retrieved ${retrievalResults.matches.length} matches via ${retrievalResults.method}`);
+    
+    // Step 3: Check if we should use LLM
+    const useLLM = shouldUseLLM(retrievalResults);
+    
+    if (!useLLM.shouldUse) {
+      console.log(`⚡ Skipping LLM: ${useLLM.reason}`);
+      const topMatch = retrievalResults.matches[0];
       return res.json({
         success: true,
         inquiry: inquiry_text,
-        answer: response,
-        confidence: 0.3,
-        sources: [],
-        method: 'gpt_generated_no_sources',
-        message: 'לא נמצאו תשובות דומות במערכת, התשובה נוצרה על בסיס ידע כללי'
+        answer: topMatch.response_text,
+        confidence: retrievalResults.confidence,
+        sources: retrievalResults.matches.slice(0, 3).map(m => ({
+          case_id: m.case_id,
+          row_number: m.row_number,
+          relevance: m.score,
+          reason: m.matchType
+        })),
+        method: `${retrievalResults.method}_no_llm`,
+        llm_skipped: true,
+        skip_reason: useLLM.reason
       });
     }
-
-    // Step 2: Prepare candidates for GPT-4 validation - OPTIMIZED: only top 5
-    const candidatesForValidation = candidates.slice(0, 5).map((candidate, idx) => ({
-      id: idx + 1,
-      case_id: candidate.case_id,
-      // Truncate text to reduce token usage and speed up processing
-      inquiry: candidate.inquiry_text?.substring(0, 300) || '',
-      response: candidate.response_text?.substring(0, 400) || '',
-      similarity_score: candidate.similarity || candidate.smartScore || 0,
-      row_number: candidate.row_number
-    }));
-
-    // Step 3: Send to GPT-4 for validation and response generation
-    const validationPrompt = `אתה מערכת חכמה לניתוח שאלות ותשובות בנושא תחבורה ציבורית בירושלים.
-
-שאלת המשתמש: "${inquiry_text}"
-
-להלן רשימת תשובות אפשריות מהמערכת:
-
-${candidatesForValidation.map(c => `
-[${c.id}] מזהה: ${c.case_id} (שורה ${c.row_number})
-שאלה מקורית: ${c.inquiry}
-תשובה: ${c.response}
-ציון דמיון: ${c.similarity_score.toFixed(2)}
----`).join('\n')}
-
-משימתך:
-1. זהה אילו תשובות עונות על השאלה - כולל תשובות חלקיות או קשורות
-2. תן משקל גבוה לתשובות שמזכירות את אותם מיקומים, רחובות או קווי אוטובוס
-3. אם תשובה מכילה מידע שיכול לעזור למשתמש - כלול אותה גם אם היא לא מושלמת
-4. דרג רלוונטיות 0-10 (היה נדיב - 5+ לכל דבר שקשור חלקית)
-5. שלב מידע ממספר מקורות ליצירת תשובה מקיפה
-
-חשוב מאוד:
-- אם השאלה מזכירה רחוב או מיקום, כל תשובה שמזכירה אותו מיקום רלוונטית!
-- אם אתה מסופק אם תשובה רלוונטית - כלול אותה
-- עדיף לתת יותר מידע מאשר פחות
-
-החזר תשובה בפורמט JSON:
-{
-  "relevant_answers": [
-    {"id": 1, "relevance": 9, "reason": "התשובה מכילה מידע על..."},
-    ...
-  ],
-  "final_answer": "התשובה המלאה והמקיפה כאן...",
-  "source_rows": [מספרי השורות],
-  "confidence": 0.95
-}`;
-
-    try {
-      // Add timeout wrapper for GPT-4 call
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('GPT-4 timeout')), 15000) // 15 second timeout
-      );
-      
-      const gptPromise = openai.chat.completions.create({
-        model: "gpt-4-turbo-preview", // Keeping GPT-4 as requested
-        messages: [
-          { 
-            role: "system", 
-            content: "אתה עוזר מומחה בתחבורה ציבורית בירושלים. תן תשובות מדויקות ומבוססות על המידע שניתן לך. החזר תמיד תשובה בפורמט JSON תקין."
-          },
-          { 
-            role: "user", 
-            content: validationPrompt 
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 1200, // Reduced from 2000 for faster response
-        response_format: { type: "json_object" }
-      });
-      
-      const gptResponse = await Promise.race([gptPromise, timeoutPromise]);
-
-      const validationResult = JSON.parse(gptResponse.choices[0].message.content);
-      
-      console.log(`✅ GPT-4 validation complete. Confidence: ${validationResult.confidence}`);
-      console.log(`📝 Used sources from rows: ${validationResult.source_rows?.join(', ') || 'none'}`);
-
-      // Prepare sources for response - include more sources with lower threshold
-      const sources = validationResult.relevant_answers?.map(ra => {
-        const candidate = candidatesForValidation.find(c => c.id === ra.id);
-        return {
-          case_id: candidate?.case_id,
-          row_number: candidate?.row_number,
-          relevance: ra.relevance,
-          reason: ra.reason
-        };
-      }).filter(s => s.relevance >= 5) || []; // Lower threshold - include partially relevant
-
-      res.json({
+    
+    // Step 4: Synthesize with LLM if available
+    if (!openaiAvailable || !openai) {
+      console.log('⚠️ OpenAI not available, returning best match');
+      const topMatch = retrievalResults.matches[0];
+      return res.json({
         success: true,
         inquiry: inquiry_text,
-        answer: validationResult.final_answer,
-        confidence: validationResult.confidence || 0.8,
-        sources: sources,
-        source_rows: validationResult.source_rows || [],
-        method: 'smart_search_gpt4_validated',
-        candidates_evaluated: candidatesForValidation.length
+        answer: topMatch ? topMatch.response_text : 'לא נמצאו תוצאות מתאימות',
+        confidence: retrievalResults.confidence,
+        sources: retrievalResults.matches.slice(0, 3).map(m => ({
+          case_id: m.case_id,
+          row_number: m.row_number,
+          relevance: m.score
+        })),
+        method: `${retrievalResults.method}_no_openai`
       });
-
-    } catch (gptError) {
-      const isTimeout = gptError.message === 'GPT-4 timeout';
-      console.error(`❌ GPT-4 validation failed${isTimeout ? ' (timeout)' : ''}:`, gptError.message);
-      
-      // Return best candidates without GPT enhancement if timeout/error
-      if (candidates.length > 0) {
-        // Use the best candidate as the answer
-        const bestCandidate = candidates[0];
-        res.json({
-          success: true,
-          inquiry: inquiry_text,
-          answer: bestCandidate.response_text,
-          confidence: 0.7,
-          sources: candidates.slice(0, 3).map(c => ({
-            case_id: c.case_id,
-            row_number: c.row_number,
-            relevance: (c.similarity || c.smartScore || 0).toFixed(2),
-            reason: c.matchReasons || ''
-          })),
-          method: isTimeout ? 'timeout_fallback' : 'error_fallback',
-          message: isTimeout ? 
-            'החיפוש החכם נקטע - מציג תוצאות ללא עיבוד נוסף' : 
-            'שגיאה בעיבוד - מציג תוצאות מקוריות',
-          candidates_evaluated: candidates.length
-        });
-      } else {
-        // No candidates found
-        res.status(500).json({
-          success: false,
-          error: 'Failed to generate response',
-          message: 'שגיאה ביצירת תשובה - אנא נסה שנית'
-        });
-      }
     }
-
+    
+    // Use LLM to synthesize response
+    const synthesis = await synthesizeResponse(
+      inquiry_text,
+      retrievalResults.matches,
+      openai
+    );
+    
+    return res.json({
+      success: true,
+      inquiry: inquiry_text,
+      answer: synthesis.answer,
+      confidence: synthesis.confidence,
+      sources: synthesis.sources,
+      method: `${retrievalResults.method}_${synthesis.model}`,
+      search_info: {
+        retrieval_method: retrievalResults.method,
+        matches_found: retrievalResults.matches.length,
+        llm_used: true,
+        model: synthesis.model
+      }
+    });
+    
   } catch (error) {
-    console.error('❌ Error in /smart-search endpoint:', error);
-    res.status(500).json({ 
+    console.error('❌ Error in RAG smart-search:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Internal server error',
-      message: error.message
+      error: 'Search failed',
+      details: error.message
     });
   }
 });
