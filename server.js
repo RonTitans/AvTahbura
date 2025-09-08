@@ -1866,6 +1866,7 @@ app.post('/search-by-ticket', async (req, res) => {
 });
 
 // NEW: Smart Search with GPT-4 Validation endpoint
+// Smart Search endpoint - now using RAG system
 app.post('/smart-search', async (req, res) => {
   try {
     const { inquiry_text } = req.body;
@@ -2087,6 +2088,7 @@ ${candidatesForValidation.map(c => `
 // NEW: Enhanced RAG Recommendation endpoint
 app.post('/api/recommend', async (req, res) => {
   try {
+    // Support both 'query' and 'inquiry_text' for backward compatibility
     const { query, inquiry_text } = req.body;
     const searchQuery = query || inquiry_text;
     
