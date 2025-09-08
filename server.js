@@ -1879,13 +1879,16 @@ app.post('/smart-search', async (req, res) => {
 
     console.log(`\n🎯 Smart Search (RAG) initiated for: "${inquiry_text}"`);
     
-    // For now, use simplified logic until RAG modules are fully tested
-    // Import RAG modules
-    const { normalizeHebrew, extractBusLines } = await import('./rag/core/normalizer.js');
-    const { analyzeQuery } = await import('./rag/core/analyzer.js');
-    const { hybridRetrieval } = await import('./rag/core/retriever.js');
-    const { shouldUseLLM } = await import('./rag/llm/gating.js');
-    const { synthesizeResponse } = await import('./rag/llm/synthesis.js');
+    // Use createRequire to load CommonJS modules in ES module context
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    
+    // Load RAG modules using require
+    const { normalizeHebrew, extractBusLines } = require('./rag/core/normalizer.js');
+    const { analyzeQuery } = require('./rag/core/analyzer.js');
+    const { hybridRetrieval } = require('./rag/core/retriever.js');
+    const { shouldUseLLM } = require('./rag/llm/gating.js');
+    const { synthesizeResponse } = require('./rag/llm/synthesis.js');
     
     // Step 1: Analyze query
     const analysis = analyzeQuery(inquiry_text);
