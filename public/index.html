@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת פניות תחבורה - תוכנית אב לתחבורה</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Prevent flash of unstyled content */
+        html {
+            visibility: visible;
+            opacity: 1;
+            background: #f5f7fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: #f5f7fa;
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            color: white;
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: all 0.3s ease;
+            direction: rtl;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .spinner {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+            margin-top: 40px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-section {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .result-title {
+            color: #2d3748;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .result-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .exact-match .result-icon {
+            background: #48bb78;
+            color: white;
+        }
+
+        .ai-response .result-icon {
+            background: #667eea;
+            color: white;
+        }
+
+        .no-match {
+            color: #e53e3e;
+            text-align: center;
+            padding: 20px;
+            background: #fff5f5;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .result-content {
+            color: #4a5568;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .related-matches {
+            margin-top: 20px;
+        }
+
+        .related-match {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .related-match:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .match-score {
+            display: inline-block;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
+        .select-response-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .select-response-btn:hover {
+            background: #38a169;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(72, 187, 120, 0.3);
+        }
+
+        .select-response-btn:active {
+            transform: translateY(0);
+        }
+
+        .official-response {
+            background: #f0fdf4;
+            border: 2px solid #48bb78;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        .official-response-title {
+            color: #22543d;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .official-response-content {
+            color: #2d3748;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .metadata {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .edit-btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .edit-btn:hover {
+            background: #3182ce;
+        }
+
+        .save-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .save-btn:hover {
+            background: #38a169;
+        }
+
+        .send-sheet-btn {
+            background: #9f7aea;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+
+        .send-sheet-btn:hover {
+            background: #805ad5;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(159, 122, 234, 0.3);
+        }
+
+        .send-sheet-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            direction: rtl;
+            line-height: 1.8;
+        }
+
+        .response-textarea:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header" style="position: relative;">
+            <!-- Corner buttons inside the card -->
+            <div style="position: absolute; top: 15px; left: 15px;">
+                <button onclick="logout()" style="
+                    background: #e53e3e;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3);
+                " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(229, 62, 62, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(229, 62, 62, 0.3)';">
+                    🚪 יציאה
+                </button>
+            </div>
+            
+            <!-- Integration button removed as requested -->
+            <!-- <div style="position: absolute; top: 15px; right: 15px;">
+                <a href="/integrations.html" style="...">
+                    ⚙️ אינטגרציות
+                </a>
+            </div> -->
+            
+            <div class="logo">🚌</div>
+            <h1>מערכת פניות תחבורה</h1>
+            <p class="subtitle">תוכנית אב לתחבורה - מחלקת תחבורה ציבורית</p>
+        </div>
+
+        <form id="inquiryForm">
+            <div class="form-group">
+                <label for="inquiry" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <span style="font-size: 24px;">🤖</span>
+                    <span>חיפוש חכם עם בינה מלאכותית</span>
+                </label>
+                <p style="font-size: 14px; color: #718096; margin-bottom: 16px; line-height: 1.5;">
+                    המערכת משתמשת ב-GPT-4 למציאת תשובות רלוונטיות גם כאשר השאלה מנוסחת באופן שונה לחלוטין.
+                    פשוט כתוב את השאלה שלך בשפה טבעית.
+                </p>
+                
+                <!-- Search Mode Switcher -->
+                <!-- Mode switcher hidden - only smart search active -->
+                <div class="mode-switcher" style="
+                    display: none;
+                ">
+                    <button type="button" class="mode-btn" data-mode="regular" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: #4299e1;
+                        color: white;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        רגיל
+                    </button>
+                    <button type="button" class="mode-btn" data-mode="precise" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        מדויק
+                    </button>
+                    <button type="button" class="mode-btn" data-mode="ticket" aria-pressed="false" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                    ">
+                        לפי מזהה פנייה
+                    </button>
+                    <button type="button" class="mode-btn" data-mode="smart" aria-pressed="true" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border: none;
+                        background: transparent;
+                        color: #4a5568;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        min-height: 44px;
+                        position: relative;
+                    ">
+                        🤖 חיפוש חכם
+                        <span style="
+                            position: absolute;
+                            top: 4px;
+                            right: 4px;
+                            background: #f56565;
+                            color: white;
+                            font-size: 9px;
+                            padding: 1px 4px;
+                            border-radius: 8px;
+                            font-weight: 600;
+                        ">חדש</span>
+                    </button>
+                </div>
+                
+                <textarea 
+                    id="inquiry" 
+                    name="inquiry" 
+                    placeholder="לדוגמה: קו 408 שינוי מסלול בית שמש"
+                    required
+                ></textarea>
+                
+                <!-- Inline validation tip -->
+                <div id="modeTip" class="mode-tip" style="
+                    font-size: 12px;
+                    color: #e53e3e;
+                    margin-top: 8px;
+                    min-height: 16px;
+                    display: none;
+                "></div>
+            </div>
+            
+            <div class="button-container" style="
+                display: flex;
+                justify-content: center;
+                margin-top: 20px;
+            ">
+                <button type="submit" id="searchBtn" style="
+                    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+                    color: white;
+                    padding: 16px 32px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 18px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    min-width: 200px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(66, 153, 225, 0.4)';" 
+                   onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(66, 153, 225, 0.3)';">
+                    🔍 חפש
+                </button>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>מעבד את הפנייה שלך...</p>
+        </div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('inquiryForm');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const inquiryInput = document.getElementById('inquiry');
+            const searchBtn = document.getElementById('searchBtn');
+            const modeTip = document.getElementById('modeTip');
+        
+        let currentMode = 'smart'; // Default to smart search
+        // Global variables
+        let currentInquiry = '';
+        let currentOfficialResponse = '';
+        let isEditing = false;
+        let currentData = null;
+        
+        // Define functions first
+        function setActiveMode(mode) {
+            const modeButtons = document.querySelectorAll('.mode-btn');
+            modeButtons.forEach(btn => {
+                const isActive = btn.dataset.mode === mode;
+                btn.setAttribute('aria-pressed', isActive);
+                btn.style.background = isActive ? '#4299e1' : 'transparent';
+                btn.style.color = isActive ? 'white' : '#4a5568';
+            });
+        }
+        
+        function updatePlaceholder() {
+            const placeholders = {
+                regular: 'לדוגמה: קו 408 שינוי מסלול בית שמש',
+                precise: 'לדוגמה: קו 630',
+                ticket: 'לדוגמה: CAS-665326-T5D8X2',
+                smart: 'שאל שאלה כלשהי - המערכת תמצא תשובות רלוונטיות גם אם הן נכתבו אחרת'
+            };
+            inquiryInput.placeholder = placeholders[currentMode];
+        }
+        
+        function validateInput() {
+            const input = inquiryInput.value.trim();
+            modeTip.style.display = 'none';
+            searchBtn.disabled = false;
+            
+            if (!input) {
+                searchBtn.disabled = true;
+                return;
+            }
+            
+            if (currentMode === 'precise') {
+                const busLinePattern = /(?:קו\s*(\d+[א-ת]?)|\b(\d+[א-ת]?)\b)/g;
+                const matches = input.match(busLinePattern);
+                if (!matches) {
+                    modeTip.textContent = 'נא להזין מספר קו לחיפוש מדויק';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
+            } else if (currentMode === 'ticket') {
+                const ticketPattern = /CAS-[A-Z0-9]+-[A-Z0-9]+/i;
+                if (!ticketPattern.test(input)) {
+                    modeTip.textContent = 'נא להזין מזהה פנייה תקין (למשל CAS-… )';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
+            } else if (currentMode === 'smart') {
+                // Smart search accepts any input, just need minimum length
+                if (input.length < 3) {
+                    modeTip.textContent = 'נא להזין לפחות 3 תווים לחיפוש חכם';
+                    modeTip.style.display = 'block';
+                    searchBtn.disabled = true;
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load saved mode from localStorage
+        const savedMode = localStorage.getItem('searchMode');
+        if (savedMode && ['regular', 'precise', 'ticket', 'smart'].includes(savedMode)) {
+            currentMode = savedMode;
+        }
+        // Always set the active mode on load
+        setActiveMode(currentMode);
+        updatePlaceholder();
+        
+        // Mode switcher functionality
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                currentMode = mode;
+                setActiveMode(mode);
+                localStorage.setItem('searchMode', mode);
+                updatePlaceholder();
+                
+                // Clear previous search when switching modes
+                inquiryInput.value = '';
+                results.style.display = 'none';
+                results.innerHTML = '';
+                modeTip.style.display = 'none';
+                searchBtn.disabled = true;  // Disable until user types
+                
+                // Focus on input for better UX
+                inquiryInput.focus();
+            });
+        });
+        
+        // Input validation on type
+        inquiryInput.addEventListener('input', validateInput);
+        
+        // Keyboard shortcuts
+        inquiryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!searchBtn.disabled) {
+                    form.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+        
+        // Form submit handler - main search logic
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = inquiryInput.value.trim();
+            if (!input) return;
+            
+            currentInquiry = input;
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'מחפש…';
+            
+            try {
+                let endpoint, requestBody, searchType;
+                
+                if (currentMode === 'regular') {
+                    endpoint = '/recommend';
+                    requestBody = {
+                        inquiry_text: input,
+                        max_recommendations: 5
+                    };
+                    searchType = 'רגיל';
+                } else if (currentMode === 'precise') {
+                    endpoint = '/search-by-line';
+                    const busLinePattern = /(?:קו\s*(\d+[א-ת]?)|\b(\d+[א-ת]?)\b)/g;
+                    const lines = [...input.matchAll(busLinePattern)].map(match => match[1] || match[2]);
+                    requestBody = {
+                        busLines: lines,
+                        originalQuery: input
+                    };
+                    searchType = 'מדויק · קווים: ' + lines.join(', ');
+                } else if (currentMode === 'ticket') {
+                    endpoint = '/search-by-ticket';
+                    const ticketMatch = input.match(/CAS-[A-Z0-9]+-[A-Z0-9]+/i);
+                    const ticketId = ticketMatch ? ticketMatch[0].toUpperCase() : input;
+                    requestBody = {
+                        ticketId: ticketId
+                    };
+                    searchType = 'לפי מזהה פנייה: ' + ticketId;
+                } else if (currentMode === 'smart') {
+                    endpoint = '/smart-search';
+                    requestBody = {
+                        inquiry_text: input
+                    };
+                    searchType = 'חיפוש חכם עם GPT-4';
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Include cookies for session authentication
+                    body: JSON.stringify(requestBody)
+                });
+
+                // Check if response is ok
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Session expired, redirect to login
+                        window.location.href = '/login-new.html';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (currentMode === 'regular') {
+                    currentData = data;
+                    displayResults(data);
+                } else if (currentMode === 'precise') {
+                    displayPreciseResults(data, searchType);
+                } else if (currentMode === 'ticket') {
+                    displayTicketResults(data, searchType);
+                } else if (currentMode === 'smart') {
+                    displaySmartResults(data, searchType);
+                }
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                
+                // Show detailed error message
+                let errorHtml = `
+                    <div style="background: #fed7d7; border: 2px solid #fc8181; color: #742a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="margin: 0 0 10px 0; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 24px;">❌</span>
+                            שגיאה בחיפוש החכם
+                        </h3>
+                        <p style="margin: 10px 0; font-weight: bold;">${error.message || 'שגיאה לא ידועה'}</p>
+                `;
+                
+                // Try to parse error response for more details
+                if (error.response) {
+                    try {
+                        const errorData = await error.response.json();
+                        if (errorData.details) {
+                            errorHtml += `
+                                <div style="background: white; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                                    <strong>פרטי השגיאה:</strong>
+                                    <ul style="margin: 5px 0;">
+                                        ${errorData.details.errorCode ? `<li>קוד: ${errorData.details.errorCode}</li>` : ''}
+                                        ${errorData.details.suggestion ? `<li>הצעה: ${errorData.details.suggestion}</li>` : ''}
+                                        ${errorData.details.candidatesFound ? `<li>נמצאו ${errorData.details.candidatesFound} תוצאות (לא עובדו)</li>` : ''}
+                                    </ul>
+                                </div>
+                            `;
+                        }
+                    } catch (e) {
+                        console.error('Could not parse error response:', e);
+                    }
+                }
+                
+                errorHtml += `
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #fc8181;">
+                            <strong>מה לעשות?</strong>
+                            <ul style="margin: 5px 0;">
+                                <li>בדוק את החיבור לאינטרנט</li>
+                                <li>נסה שוב בעוד מספר שניות</li>
+                                <li>אם הבעיה נמשכת, פנה למנהל המערכת</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                
+                results.innerHTML = errorHtml;
+                results.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                searchBtn.disabled = false;
+                searchBtn.textContent = '🔍 חפש';
+            }
+        });
+        
+        // Result display functions
+        function displayResults(data) {
+            let html = '';
+
+            // Display original inquiry
+            html += `
+                <div class="result-section">
+                    <div class="result-title">
+                        <span class="result-icon">📝</span>
+                        הפנייה שלך:
+                    </div>
+                    <div class="result-content">${escapeHtml(data.inquiry)}</div>
+                </div>
+            `;
+
+            // Display exact match or no match message
+            if (data.exact_match) {
+                html += `
+                    <div class="result-section exact-match">
+                        <div class="result-title">
+                            <span class="result-icon">✓</span>
+                            נמצאה תשובה מדויקת ממאגר הנתונים:
+                        </div>
+                        <div class="result-content">${escapeHtml(data.exact_match.original_response)}</div>
+                    </div>
+                `;
+            } else if (data.related_matches && data.related_matches.length > 0) {
+                html += `
+                    <div class="result-section">
+                        <div class="result-title">
+                            <span class="result-icon">🔍</span>
+                            פניות דומות שנמצאו:
+                        </div>
+                        <div class="related-matches">
+                `;
+                
+                data.related_matches.forEach((match, index) => {
+                    const formattedDate = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : 'לא זמין';
+                    const caseId = match.case_id || '';
+                    const matchReasons = match.match_reasons || '';
+                    
+                    html += `
+                        <div class="related-match" data-match-index="${index}">
+                            <div class="metadata">
+                                ${caseId ? `
+                                    <div class="metadata-item">
+                                        <span>🔖</span>
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            color: #4299e1; 
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
+                                            ${caseId}
+                                        </span>
+                                    </div>
+                                ` : ''}
+                                <div class="metadata-item">
+                                    <span>📅</span>
+                                    <span>תאריך: ${formattedDate}</span>
+                                </div>
+                                <div class="metadata-item">
+                                    <span>📍</span>
+                                    <span>שורה: ${match.row_number || 'לא זמין'}</span>
+                                </div>
+                                ${matchReasons ? `
+                                    <div class="metadata-item">
+                                        <span>🔍</span>
+                                        <span style="color: #805ad5; font-weight: 600;">${matchReasons}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${match.summary ? `
+                                <div style="background: #f0f4f8; padding: 8px 12px; border-radius: 6px; margin: 10px 0; border-right: 3px solid #4299e1;">
+                                    <strong style="color: #2d3748;">תמצית:</strong>
+                                    <span style="color: #4a5568; font-size: 14px;">${escapeHtml(match.summary)}</span>
+                                </div>
+                            ` : ''}
+                            <strong>${escapeHtml(match.description)}</strong>
+                            <div class="result-content" style="margin-top: 10px;">${escapeHtml(match.original_response)}</div>
+                            <button class="select-response-btn" onclick="selectResponse(${index})">בחר תשובה זו</button>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            } else {
+                html += `
+                    <div class="no-match">
+                        <p>לא נמצאה התאמה מדויקת במאגר הנתונים</p>
+                    </div>
+                `;
+            }
+
+            results.innerHTML = html;
+            results.style.display = 'block';
+            
+            // Display AI-enhanced response with full functionality
+            if (data.enhanced_response) {
+                currentOfficialResponse = data.enhanced_response;
+                displayOfficialResponse(data.enhanced_response);
+            }
+        }
+        
+        function displayPreciseResults(data, searchType) {
+            const INITIAL_SHOW = 10; // Show first 10 results
+            const matches = data.matches || [];
+            const topics = data.topics || [];
+            const totalMatches = matches.length;
+            
+            // Store original matches globally for filtering
+            window.allPreciseMatches = matches;
+            window.currentTopicFilter = 'all';
+            
+            let html = `
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3>🚌 תוצאות חיפוש – ${searchType}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <p style="margin: 0; font-size: 18px; font-weight: bold; color: #2d3748;">
+                            נמצאו <span id="matchesCount">${totalMatches}</span> תוצאות
+                        </p>
+                        <span id="showingCount" style="background: #edf2f7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                            ${totalMatches > INITIAL_SHOW ? `מוצגות ${Math.min(INITIAL_SHOW, totalMatches)} מתוך ${totalMatches}` : `מוצגות ${totalMatches}`}
+                        </span>
+                    </div>
+                    
+                    ${topics.length > 0 ? `
+                        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">
+                                🔍 סנן לפי נושא:
+                            </label>
+                            <select id="topicFilter" onchange="filterByTopic(this.value)" style="
+                                width: 100%;
+                                padding: 10px;
+                                border: 2px solid #cbd5e0;
+                                border-radius: 6px;
+                                font-size: 16px;
+                                font-family: inherit;
+                                background: white;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.borderColor='#4299e1'" onmouseout="this.style.borderColor='#cbd5e0'">
+                                <option value="all">הצג הכל (${totalMatches} תוצאות)</option>
+                                ${topics.map(t => `
+                                    <option value="${t.topic}">${t.topic} (${t.count} תוצאות)</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            if (matches.length > 0) {
+                // Create results container with data attributes for pagination
+                html += '<div id="preciseResultsContainer">';
+                
+                matches.forEach((match, idx) => {
+                    const isHidden = idx >= INITIAL_SHOW;
+                    const caseId = match.case_id || `result-${idx}`;
+                    const date = match.created_date ? new Date(match.created_date).toLocaleDateString('he-IL') : '';
+                    const topic = match.topic || 'אחר';
+                    
+                    html += `
+                        <div class="result-card precise-result" data-index="${idx}" data-topic="${topic}" style="
+                            margin-bottom: 15px; 
+                            padding: 15px; 
+                            background: white; 
+                            border-radius: 8px; 
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            border: 1px solid #e2e8f0;
+                            transition: all 0.3s ease;
+                            ${isHidden ? 'display: none;' : ''}
+                        " onmouseover="this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" 
+                           onmouseout="this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)'">
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <div>
+                                    <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        #${idx + 1}
+                                    </span>
+                                    ${caseId && caseId !== `result-${idx}` ? `
+                                        <span onclick="searchByTicketId('${caseId}')" style="
+                                            margin-right: 10px; 
+                                            color: #4299e1; 
+                                            font-size: 12px;
+                                            cursor: pointer;
+                                            text-decoration: underline;
+                                            transition: all 0.2s;
+                                        " onmouseover="this.style.color='#2b6cb0'; this.style.fontWeight='600';" 
+                                           onmouseout="this.style.color='#4299e1'; this.style.fontWeight='normal';"
+                                           title="לחץ לחיפוש לפי מזהה פניה">
+                                            ${caseId}
+                                        </span>
+                                    ` : ''}
+                                    ${date ? `
+                                        <span style="color: #718096; font-size: 12px;">
+                                            📅 ${date}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <span style="background: #48bb78; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        קו ${match.found_lines ? match.found_lines.join(', ') : 'לא צוין'}
+                                    </span>
+                                    <span style="background: #805ad5; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;">
+                                        ${topic}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="result-summary" style="margin-bottom: 10px;">
+                                <div style="background: #f0f4f8; padding: 8px 12px; border-radius: 6px; border-right: 3px solid #4299e1;">
+                                    <strong style="color: #2d3748;">תמצית:</strong>
+                                    <span style="color: #4a5568; font-size: 14px; line-height: 1.5;">
+                                        ${match.summary ? escapeHtml(match.summary) : 'אין תמצית זמינה'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 10px; display: flex; gap: 8px;">
+                                <button onclick="toggleFullQuestion(${idx})" style="
+                                    background: transparent;
+                                    color: #9f7aea;
+                                    border: 1px solid #9f7aea;
+                                    padding: 4px 12px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#9f7aea'; this.style.color='white';" 
+                                   onmouseout="this.style.background='transparent'; this.style.color='#9f7aea';">
+                                    הצג פנייה מלאה ↓
+                                </button>
+                                
+                                <button onclick="toggleFullResponse(${idx})" style="
+                                    background: transparent;
+                                    color: #4299e1;
+                                    border: 1px solid #4299e1;
+                                    padding: 4px 12px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#4299e1'; this.style.color='white';" 
+                                   onmouseout="this.style.background='transparent'; this.style.color='#4299e1';">
+                                    הצג תשובה מלאה ↓
+                                </button>
+                            </div>
+                            
+                            <div id="question-${idx}" style="display: none; margin-top: 10px; padding: 10px; background: #f3e8ff; border-radius: 4px;">
+                                <strong>פנייה מלאה:</strong>
+                                <div style="margin-top: 5px; color: #2d3748; line-height: 1.6;">
+                                    ${match.inquiry ? escapeHtml(match.inquiry) : 'אין פנייה זמינה'}
+                                </div>
+                            </div>
+                            
+                            <div id="response-${idx}" style="display: none; margin-top: 10px; padding: 10px; background: #e6fffa; border-radius: 4px;">
+                                <strong>תשובה:</strong>
+                                <div style="margin-top: 5px; color: #2d3748; line-height: 1.6;">
+                                    ${match.response ? escapeHtml(match.response) : 'אין תשובה זמינה'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                
+                // Add "Show More" button if there are more than INITIAL_SHOW results
+                if (totalMatches > INITIAL_SHOW) {
+                    html += `
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button id="showMoreBtn" onclick="showMorePreciseResults()" style="
+                                background: #4299e1;
+                                color: white;
+                                border: none;
+                                padding: 12px 32px;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+                            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(66, 153, 225, 0.4)';" 
+                               onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(66, 153, 225, 0.3)';">
+                                הצג עוד תוצאות (${totalMatches - INITIAL_SHOW} נוספות)
+                            </button>
+                        </div>
+                    `;
+                }
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 40px; background: white; border-radius: 8px;">
+                        <p style="font-size: 18px; color: #718096;">לא נמצאו תוצאות עבור קו ${searchType.split(': ')[1] || ''}</p>
+                        <p style="font-size: 14px; color: #a0aec0; margin-top: 10px;">נסה לחפש מספר קו אחר</p>
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+        
+        // Helper function to toggle full response visibility
+        window.toggleFullResponse = function(index) {
+            const responseDiv = document.getElementById(`response-${index}`);
+            const button = event.target;
+            if (responseDiv.style.display === 'none') {
+                responseDiv.style.display = 'block';
+                button.textContent = 'הסתר תשובה ↑';
+            } else {
+                responseDiv.style.display = 'none';
+                button.textContent = 'הצג תשובה מלאה ↓';
+            }
+        }
+        
+        // Filter results by topic
+        window.filterByTopic = function(selectedTopic) {
+            window.currentTopicFilter = selectedTopic;
+            const allResults = document.querySelectorAll('.precise-result');
+            let visibleCount = 0;
+            let filteredCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                const cardIndex = parseInt(resultCard.getAttribute('data-index'));
+                
+                if (selectedTopic === 'all' || cardTopic === selectedTopic) {
+                    // Show this result if it matches the filter
+                    filteredCount++;
+                    if (visibleCount < 10) {
+                        resultCard.style.display = '';
+                        visibleCount++;
+                    } else {
+                        resultCard.style.display = 'none';
+                    }
+                } else {
+                    // Hide this result
+                    resultCard.style.display = 'none';
+                }
+            });
+            
+            // Update counts
+            document.getElementById('matchesCount').textContent = filteredCount;
+            
+            const showingCountElement = document.getElementById('showingCount');
+            if (filteredCount > 10) {
+                showingCountElement.textContent = `מוצגות ${visibleCount} מתוך ${filteredCount}`;
+            } else {
+                showingCountElement.textContent = `מוצגות ${filteredCount}`;
+            }
+            
+            // Update or hide the "Show More" button
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                if (filteredCount > 10) {
+                    showMoreBtn.style.display = '';
+                    showMoreBtn.innerHTML = `הצג עוד תוצאות (${filteredCount - visibleCount} נוספות)`;
+                    showMoreBtn.onclick = function() { showMoreFilteredResults(selectedTopic); };
+                } else {
+                    showMoreBtn.style.display = 'none';
+                }
+            }
+        }
+        
+        // Show more filtered results
+        window.showMoreFilteredResults = function(topic) {
+            const allResults = document.querySelectorAll('.precise-result');
+            let shownCount = 0;
+            
+            allResults.forEach((resultCard) => {
+                const cardTopic = resultCard.getAttribute('data-topic');
+                
+                if (topic === 'all' || cardTopic === topic) {
+                    if (resultCard.style.display === 'none' && shownCount < 50) {
+                        resultCard.style.display = '';
+                        shownCount++;
+                    }
+                }
+            });
+            
+            // Update showing count
+            const visibleResults = document.querySelectorAll('.precise-result:not([style*="display: none"])').length;
+            const totalFiltered = topic === 'all' ? 
+                window.allPreciseMatches.length : 
+                window.allPreciseMatches.filter(m => m.topic === topic).length;
+            
+            document.getElementById('showingCount').textContent = `מוצגות ${visibleResults} מתוך ${totalFiltered}`;
+            
+            // Hide button if all are shown
+            if (visibleResults >= totalFiltered) {
+                document.getElementById('showMoreBtn').style.display = 'none';
+            } else {
+                document.getElementById('showMoreBtn').innerHTML = `הצג עוד תוצאות (${totalFiltered - visibleResults} נוספות)`;
+            }
+        }
+        
+        // Helper function to toggle full question visibility
+        window.toggleFullQuestion = function(index) {
+            const questionDiv = document.getElementById(`question-${index}`);
+            const button = event.target;
+            if (questionDiv.style.display === 'none') {
+                questionDiv.style.display = 'block';
+                button.textContent = 'הסתר פנייה ↑';
+            } else {
+                questionDiv.style.display = 'none';
+                button.textContent = 'הצג פנייה מלאה ↓';
+            }
+        }
+        
+        // Helper function to show more results
+        window.showMorePreciseResults = function() {
+            const hiddenResults = document.querySelectorAll('.precise-result[style*="display: none"]');
+            hiddenResults.forEach(result => {
+                result.style.display = 'block';
+            });
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                showMoreBtn.style.display = 'none';
+            }
+        }
+        
+        function displayTicketResults(data, searchType) {
+            let html = `
+                <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3>📋 ציר זמן של פנייה – ${searchType}</h3>
+                    <p style="font-size: 18px; margin: 10px 0;">
+                        <strong>נמצאו ${data.total_entries || 0} רשומות</strong> 
+                        <span style="color: #718096; font-size: 14px;">(מסודר כרונולוגית)</span>
+                    </p>
+                </div>
+            `;
+            
+            if (data.entries && data.entries.length > 0) {
+                // First, show the original inquiry if exists
+                const firstEntry = data.entries[0];
+                if (firstEntry.inquiry) {
+                    html += `
+                        <div style="background: #e6f7ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #1890ff;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <h4 style="margin: 0; color: #1890ff;">📝 הפנייה המקורית</h4>
+                                <span style="font-size: 12px; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 4px;">
+                                    שורה ${firstEntry.row_number || 'לא ידוע'}
+                                </span>
+                            </div>
+                            ${firstEntry.summary ? `
+                                <div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                                    <strong>תמצית:</strong> ${escapeHtml(firstEntry.summary)}
+                                </div>
+                            ` : ''}
+                            <div style="background: white; padding: 10px; border-radius: 4px;">
+                                <strong>פנייה:</strong> ${escapeHtml(firstEntry.inquiry)}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Timeline header
+                html += `<div style="position: relative; padding-left: 30px;">`;
+                
+                // Show all entries with timeline
+                data.entries.forEach((entry, idx) => {
+                    const timestamp = entry.timestamp || 'ללא תאריך';
+                    const dateObj = timestamp !== 'ללא תאריך' && timestamp !== 'לא זמין' ? new Date(timestamp) : null;
+                    const formattedDate = dateObj ? dateObj.toLocaleDateString('he-IL') : timestamp;
+                    const formattedTime = dateObj ? dateObj.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+                    
+                    const isLast = idx === data.entries.length - 1;
+                    const hasResponse = entry.response && entry.response.trim();
+                    
+                    html += `
+                        <div class="timeline-entry" style="
+                            position: relative;
+                            margin-bottom: ${isLast ? '0' : '20px'}; 
+                            padding: 15px; 
+                            background: ${hasResponse ? '#f0fff4' : '#f7fafc'}; 
+                            border: 1px solid ${hasResponse ? '#9ae6b4' : '#e2e8f0'};
+                            border-radius: 8px;
+                            margin-left: 10px;
+                        ">
+                            <!-- Timeline dot and line -->
+                            <div style="
+                                position: absolute;
+                                left: -40px;
+                                top: 20px;
+                                width: 12px;
+                                height: 12px;
+                                background: ${isLast ? '#48bb78' : '#4299e1'};
+                                border-radius: 50%;
+                                border: 2px solid white;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            "></div>
+                            ${!isLast ? `
+                                <div style="
+                                    position: absolute;
+                                    left: -35px;
+                                    top: 35px;
+                                    width: 2px;
+                                    height: calc(100% + 20px);
+                                    background: #cbd5e0;
+                                "></div>
+                            ` : ''}
+                            
+                            <!-- Arrow indicator -->
+                            ${idx > 0 ? `
+                                <div style="
+                                    position: absolute;
+                                    left: -20px;
+                                    top: 15px;
+                                    font-size: 20px;
+                                    color: #4299e1;
+                                ">→</div>
+                            ` : ''}
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                <div>
+                                    <span style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        ${idx + 1}. ${hasResponse ? 'תשובה' : 'עדכון'}
+                                    </span>
+                                    ${entry.author && entry.author !== 'לא זמין' ? `
+                                        <span style="margin-right: 10px; color: #718096; font-size: 12px;">
+                                            מאת: ${entry.author}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <div style="text-align: left;">
+                                    <div style="font-weight: bold; color: #2d3748; font-size: 14px;">
+                                        ${formattedDate}
+                                    </div>
+                                    ${formattedTime ? `
+                                        <div style="color: #718096; font-size: 12px;">
+                                            ${formattedTime}
+                                        </div>
+                                    ` : ''}
+                                    <div style="font-size: 11px; color: #999; margin-top: 2px;">
+                                        שורה ${entry.row_number || 'לא ידוע'}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${hasResponse ? `
+                                <div style="background: white; padding: 12px; border-radius: 4px; color: #2d3748; line-height: 1.6;">
+                                    ${escapeHtml(entry.response)}
+                                </div>
+                            ` : `
+                                <div style="color: #718096; font-style: italic;">
+                                    ${escapeHtml(entry.content || 'אין תוכן זמין')}
+                                </div>
+                            `}
+                            
+                            ${isLast ? `
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                                    <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                        תשובה אחרונה
+                                    </span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += '</div>'; // Close timeline container
+                
+                html += `
+                    <div style="text-align: center; margin-top: 30px;">
+                        <button onclick="clearSearch()" style="
+                            background: transparent;
+                            color: #4299e1;
+                            border: 2px solid #4299e1;
+                            padding: 8px 16px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 14px;
+                        ">
+                            נקה חיפוש
+                        </button>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 40px;">
+                        <p>לא נמצאו רשומות עבור מזהה פנייה זה</p>
+                        <p style="font-size: 14px; color: #718096; margin-top: 10px;">
+                            ודא שמזהה הפנייה נכון וקיים במערכת
+                        </p>
+                        <button onclick="clearSearch()" style="
+                            background: #4299e1;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            margin-top: 15px;
+                        ">
+                            נקה חיפוש
+                        </button>
+                    </div>
+                `;
+            }
+            
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+        
+        function displaySmartResults(data, searchType) {
+            // Show alert if there's one
+            let html = '';
+            if (data.user_alert) {
+                html += `
+                    <div style="background: #fed7d7; border: 2px solid #fc8181; color: #742a2a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 24px;">⚠️</span>
+                            <div>
+                                <strong>${data.user_alert}</strong>
+                                ${data.search_info ? `<br><small>מצב: ${data.search_info.search_type}</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <span style="font-size: 32px;">🤖</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 20px;">חיפוש חכם באמצעות OpenAI</h3>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                                המערכת ניתחה ${data.search_info?.candidates_validated || data.candidates_evaluated || 5} תשובות אפשריות
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 20px; font-size: 14px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span>🎯</span>
+                            <span>רמת ביטחון: ${Math.round((data.confidence || 0.8) * 100)}%</span>
+                        </div>
+                        ${data.source_rows && data.source_rows.length > 0 ? `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>📍</span>
+                                <span>מקורות: שורות ${data.source_rows.join(', ')}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Display the inquiry
+            html += `
+                <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 20px;">💬</span>
+                        <h4 style="margin: 0; color: #2d3748;">השאלה שלך:</h4>
+                    </div>
+                    <div style="color: #4a5568; font-size: 16px; line-height: 1.6;">
+                        ${escapeHtml(data.inquiry)}
+                    </div>
+                </div>
+            `;
+
+            // Display the AI answer
+            html += `
+                <div style="background: #f0fdf4; padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #48bb78;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <span style="font-size: 24px;">✨</span>
+                        <h4 style="margin: 0; color: #22543d; font-size: 18px;">התשובה המשולבת:</h4>
+                    </div>
+                    <div style="color: #2d3748; font-size: 16px; line-height: 1.8; white-space: pre-wrap;">
+                        ${escapeHtml(data.answer || data.final_answer || 'לא נמצאה תשובה')}
+                    </div>
+                </div>
+            `;
+
+            // Display relevant sources if available
+            if (data.sources && data.sources.length > 0) {
+                html += `
+                    <div style="background: #f7fafc; padding: 20px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0; color: #2d3748; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">📚</span>
+                            מקורות רלוונטיים שנמצאו:
+                        </h4>
+                        <div style="display: grid; gap: 12px;">
+                `;
+                
+                data.sources.forEach((source, idx) => {
+                    html += `
+                        <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <span style="
+                                    background: #667eea; 
+                                    color: white; 
+                                    padding: 2px 8px; 
+                                    border-radius: 4px; 
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    רלוונטיות: ${source.relevance || 0}/10
+                                </span>
+                                <span style="font-size: 12px; color: #718096;">
+                                    שורה ${source.row_number || 'לא ידוע'} | ${source.case_id || ''}
+                                </span>
+                            </div>
+                            ${source.reason ? `
+                                <div style="color: #4a5568; font-size: 14px; font-style: italic;">
+                                    "${escapeHtml(source.reason)}"
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Add method indicator
+            if (data.method) {
+                html += `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <span style="
+                            font-size: 11px; 
+                            color: #718096; 
+                            background: #edf2f7; 
+                            padding: 4px 12px; 
+                            border-radius: 12px;
+                            display: inline-block;
+                        ">
+                            שיטת חיפוש: ${data.method}
+                        </span>
+                    </div>
+                `;
+            }
+
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+        
+        function clearSearch() {
+            inquiryInput.value = '';
+            results.style.display = 'none';
+            inquiryInput.focus();
+        }
+        
+        // Generate official response section for regular mode
+        function generateOfficialResponseSection(aiResponse) {
+            return `
+                <div class="ai-response" style="margin-top: 20px; padding: 20px; background: #f0f8ff; border-radius: 8px; border-left: 4px solid #4299e1;">
+                    <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                        <span style="font-size: 24px; margin-left: 10px;">🤖</span>
+                        <h3 style="margin: 0; color: #2d3748;">תשובה מבוססת AI</h3>
+                    </div>
+                    <div style="color: #4a5568; line-height: 1.8; white-space: pre-wrap;">${escapeHtml(aiResponse)}</div>
+                </div>
+            `;
+        }
+
+        async function selectResponse(matchIndex) {
+            if (!currentData || !currentData.related_matches || !currentData.related_matches[matchIndex]) {
+                alert('אירעה שגיאה בבחירת התשובה');
+                return;
+            }
+
+            const selectedMatch = currentData.related_matches[matchIndex];
+            const buttons = document.querySelectorAll('.select-response-btn');
+            buttons.forEach(btn => btn.disabled = true);
+
+            // Show loading state
+            const loadingHtml = `
+                <div class="official-response" style="text-align: center;">
+                    <div class="spinner" style="margin: 20px auto;"></div>
+                    <p>מייצר תשובה רשמית מותאמת...</p>
+                </div>
+            `;
+            
+            // Remove existing official response if any
+            const existingOfficialResponse = document.querySelector('.official-response');
+            if (existingOfficialResponse) {
+                existingOfficialResponse.remove();
+            }
+            
+            results.insertAdjacentHTML('beforeend', loadingHtml);
+
+            try {
+                // First try the new endpoint
+                let response = await fetch('/generate-official-response', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Include cookies for authentication
+                    body: JSON.stringify({
+                        original_inquiry: currentInquiry,
+                        selected_response: selectedMatch.original_response,
+                        case_id: selectedMatch.case_id
+                    })
+                });
+
+                // Check for authentication error
+                if (response.status === 401) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                    return;
+                }
+
+                let officialResponse;
+                
+                if (response.ok) {
+                    // New endpoint works
+                    const data = await response.json();
+                    officialResponse = data.official_response;
+                } else {
+                    // Fallback: Use the enhanced_response from the original data if available
+                    if (currentData.enhanced_response) {
+                        // Create a custom response based on the selected match
+                        const baseResponse = selectedMatch.original_response;
+                        
+                        // Simple formatting as official response
+                        officialResponse = `שלום,\n\n${baseResponse}\n\nבברכה,\nתוכנית אב לתחבורה`;
+                        
+                        // If we have the original enhanced response and it's good, we could use it
+                        // but it might not match the selected response, so we'll use the simple format
+                    } else {
+                        throw new Error('No enhanced response available');
+                    }
+                }
+
+                // Remove loading state
+                const loadingElement = document.querySelector('.official-response');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                displayOfficialResponse(officialResponse);
+            } catch (error) {
+                console.error('Error:', error);
+                
+                // Remove loading state
+                const loadingElement = document.querySelector('.official-response');
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                // As a last resort, format the selected response nicely
+                const formattedResponse = `שלום,\n\n${selectedMatch.original_response}\n\nבברכה,\nתוכנית אב לתחבורה`;
+                displayOfficialResponse(formattedResponse);
+            } finally {
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        function displayOfficialResponse(response) {
+            const existingOfficialResponse = document.querySelector('.official-response');
+            if (existingOfficialResponse) {
+                existingOfficialResponse.remove();
+            }
+
+            currentOfficialResponse = response;
+            isEditing = false;
+
+            const officialResponseHtml = `
+                <div class="official-response" id="officialResponseContainer">
+                    <div class="official-response-title">
+                        <span class="result-icon" style="background: #48bb78; color: white;">✓</span>
+                        תשובה רשמית מוכנה לשליחה:
+                    </div>
+                    <div id="responseContentArea">
+                        <div class="official-response-content" id="responseText">${escapeHtml(response)}</div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="edit-btn" onclick="toggleEditMode()">ערוך</button>
+                        <button class="select-response-btn" onclick="copyToClipboard()">העתק לחלונית</button>
+                        <button class="send-sheet-btn" onclick="sendToGoogleSheet()" id="sendSheetBtn">שלח ל-Google Sheet</button>
+                    </div>
+                </div>
+            `;
+
+            results.insertAdjacentHTML('beforeend', officialResponseHtml);
+            
+            // Scroll to the official response
+            const officialResponseElement = document.querySelector('.official-response');
+            if (officialResponseElement) {
+                officialResponseElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function toggleEditMode() {
+            const contentArea = document.getElementById('responseContentArea');
+            
+            if (!isEditing) {
+                // Switch to edit mode
+                contentArea.innerHTML = `
+                    <textarea class="response-textarea" id="responseTextarea">${currentOfficialResponse}</textarea>
+                `;
+                document.querySelector('.edit-btn').textContent = 'שמור';
+                document.querySelector('.edit-btn').classList.add('save-btn');
+                isEditing = true;
+            } else {
+                // Save and switch back to view mode
+                const textarea = document.getElementById('responseTextarea');
+                currentOfficialResponse = textarea.value;
+                
+                contentArea.innerHTML = `
+                    <div class="official-response-content" id="responseText">${escapeHtml(currentOfficialResponse)}</div>
+                `;
+                document.querySelector('.edit-btn').textContent = 'ערוך';
+                document.querySelector('.edit-btn').classList.remove('save-btn');
+                isEditing = false;
+            }
+        }
+
+        function copyToClipboard() {
+            const textarea = document.createElement('textarea');
+            textarea.value = currentOfficialResponse;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('התשובה הועתקה ללוח!');
+        }
+
+        async function sendToGoogleSheet() {
+            const sendBtn = document.getElementById('sendSheetBtn');
+            const originalText = sendBtn.textContent;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'שולח... ⏳';
+
+            try {
+                const response = await fetch('/append-to-sheet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                    },
+                    credentials: 'include', // Include cookies for authentication
+                    body: JSON.stringify({
+                        inquiry: currentInquiry,
+                        response: currentOfficialResponse,
+                        timestamp: new Date().toISOString(),
+                        source: 'municipal_inquiry_system'
+                    })
+                });
+
+                // Check for authentication error
+                if (response.status === 401) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.details || result.error || 'Failed to send to Google Sheet');
+                }
+
+                // Success feedback
+                sendBtn.style.background = '#48bb78';
+                sendBtn.textContent = 'נשלח בהצלחה ✓';
+                
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.style.cssText = `
+                    background: #f0fdf4;
+                    border: 1px solid #48bb78;
+                    color: #22543d;
+                    padding: 10px;
+                    border-radius: 8px;
+                    margin-top: 10px;
+                    text-align: center;
+                    animation: fadeIn 0.3s ease-out;
+                `;
+                successMsg.textContent = 'התשובה נשלחה בהצלחה ל-Google Sheet!';
+                
+                const container = document.getElementById('officialResponseContainer');
+                container.appendChild(successMsg);
+                
+                // Remove success message after 3 seconds
+                setTimeout(() => {
+                    if (successMsg.parentNode) {
+                        successMsg.remove();
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Error sending to Google Sheet:', error);
+                
+                // Error feedback
+                sendBtn.style.background = '#e53e3e';
+                sendBtn.textContent = 'שגיאה ❌';
+                sendBtn.disabled = false;
+                
+                // Show error message
+                const errorMsg = document.createElement('div');
+                errorMsg.style.cssText = `
+                    background: #fff5f5;
+                    border: 1px solid #e53e3e;
+                    color: #c53030;
+                    padding: 10px;
+                    border-radius: 8px;
+                    margin-top: 10px;
+                    text-align: center;
+                    animation: fadeIn 0.3s ease-out;
+                `;
+                errorMsg.innerHTML = `
+                    <strong>שגיאה בשליחה ל-Google Sheet</strong><br>
+                    <small>${error.message}</small><br>
+                    <small>אנא נסה שוב או פנה למנהל המערכת</small>
+                `;
+                
+                const container = document.getElementById('officialResponseContainer');
+                container.appendChild(errorMsg);
+                
+                // Scroll to show the error message
+                setTimeout(() => {
+                    errorMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+                
+                // Reset button after 5 seconds
+                setTimeout(() => {
+                    sendBtn.style.background = '#9f7aea';
+                    sendBtn.textContent = originalText;
+                    if (errorMsg.parentNode) {
+                        errorMsg.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/login-new.html';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('שגיאה בניתוק מהמערכת');
+            }
+        }
+        
+        // Make functions globally accessible for onclick handlers
+        window.selectResponse = selectResponse;
+        window.toggleEditMode = toggleEditMode;
+        window.copyToClipboard = copyToClipboard;
+        window.sendToGoogleSheet = sendToGoogleSheet;
+        window.logout = logout;
+        
+        // Function to search by ticket ID when case ID is clicked
+        window.searchByTicketId = function(ticketId) {
+            // Clear current search
+            document.getElementById('inquiry').value = '';
+            
+            // Show loading
+            const loading = document.querySelector('.loading');
+            const results = document.getElementById('results');
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            
+            // Perform ticket search
+            fetch('/search-by-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ ticketId: ticketId })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login-new.html';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                loading.style.display = 'none';
+                
+                // Display ticket timeline results
+                displayTicketResults(data, 'לפי מזהה פנייה: ' + ticketId);
+                
+                // Scroll to results
+                results.scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                console.error('Error searching by ticket ID:', error);
+                loading.style.display = 'none';
+                results.innerHTML = `
+                    <div style="padding: 20px; background: #fed7d7; border-radius: 8px; color: #742a2a;">
+                        <strong>שגיאה בחיפוש:</strong> ${error.message}
+                    </div>
+                `;
+                results.style.display = 'block';
+            });
+        };
+        
+        // Keep session alive by checking every 5 minutes
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/session-info', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.loggedIn) {
+                    // Session expired, redirect to login
+                    window.location.href = '/login-new.html';
+                }
+            } catch (error) {
+                console.error('Session check failed:', error);
+            }
+        }, 5 * 60 * 1000); // Every 5 minutes
+        
+        }); // End DOMContentLoaded
+    </script>
+</body>
+</html>

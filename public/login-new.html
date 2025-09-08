@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>כניסה מאובטחת - מערכת פניות תחבורה</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 8px 16px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #14532d;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input::placeholder {
+            color: #a0aec0;
+        }
+
+        .password-container {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #718096;
+            font-size: 20px;
+            user-select: none;
+        }
+
+        .password-toggle:hover {
+            color: #4a5568;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .auth-mode-switcher {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .auth-mode-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .auth-mode-link:hover {
+            text-decoration: underline;
+        }
+
+        .signup-form {
+            display: none;
+        }
+
+        /* 2FA Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .qr-code-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .qr-code-container img {
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        .verification-input {
+            text-align: center;
+            font-size: 24px;
+            letter-spacing: 8px;
+            font-family: monospace;
+        }
+
+        .info-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0c4a6e;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        .test-mode-banner {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🚌</div>
+        <h1>מערכת פניות תחבורה</h1>
+        <p class="subtitle">תוכנית אב לתחבורה - עיריית ירושלים</p>
+        
+        <div class="security-badge">
+            <span>🔒</span>
+            <span>חיבור מאובטח עם אימות דו-שלבי</span>
+        </div>
+
+        <!-- Test mode removed - production only -->
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="login-form">
+            <div class="form-group">
+                <label for="email">כתובת אימייל</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    placeholder="your.name@jerusalem.muni.il"
+                    required
+                    autocomplete="username"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">סיסמה</label>
+                <div class="password-container">
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="הזן סיסמה חזקה"
+                        required
+                        autocomplete="current-password"
+                    >
+                    <span class="password-toggle" onclick="togglePassword('password')">👁️</span>
+                </div>
+            </div>
+
+            <button type="submit" id="loginBtn">
+                כניסה למערכת
+            </button>
+
+            <!-- Registration and simple login disabled - users are added manually through Supabase -->
+        </form>
+
+        <!-- Signup form removed - users are added manually through Supabase -->
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #718096;">מאמת...</p>
+        </div>
+    </div>
+
+    <!-- 2FA Setup Modal -->
+    <div class="modal" id="tfaSetupModal">
+        <div class="modal-content">
+            <h2 style="text-align: center; margin-bottom: 20px;">הגדרת אימות דו-שלבי</h2>
+            
+            <div class="info-box">
+                <strong>שלב 1:</strong> סרוק את קוד ה-QR באפליקציית האימות שלך
+                <br>(Google Authenticator, Microsoft Authenticator, וכו')
+            </div>
+
+            <div class="qr-code-container" id="qrCodeContainer">
+                <!-- QR code will be inserted here -->
+            </div>
+
+            <div class="info-box">
+                <strong>שלב 2:</strong> הזן את הקוד בן 6 הספרות מהאפליקציה
+            </div>
+
+            <div class="form-group">
+                <input 
+                    type="text" 
+                    id="tfaCode" 
+                    class="verification-input"
+                    placeholder="000000"
+                    maxlength="6"
+                    pattern="\d{6}"
+                >
+            </div>
+
+            <button onclick="verifyTFA()">אמת והפעל</button>
+            <button onclick="skipTFA()" style="background: #e2e8f0; color: #4a5568; margin-top: 10px;">
+                דלג לעת עתה
+            </button>
+        </div>
+    </div>
+
+    <!-- 2FA Verification Modal -->
+    <div class="modal" id="tfaVerifyModal">
+        <div class="modal-content">
+            <h2 style="text-align: center; margin-bottom: 20px;">אימות דו-שלבי</h2>
+            
+            <div class="info-box">
+                הזן את הקוד בן 6 הספרות מאפליקציית האימות שלך
+            </div>
+
+            <div class="form-group">
+                <input 
+                    type="text" 
+                    id="tfaVerifyCode" 
+                    class="verification-input"
+                    placeholder="000000"
+                    maxlength="6"
+                    pattern="\d{6}"
+                >
+            </div>
+
+            <button onclick="submitTFAVerification()">אמת</button>
+        </div>
+    </div>
+
+    <script>
+        // Check if we should use Supabase or simple auth
+        let useSupabaseAuth = false;
+        let currentSessionToken = null;
+        let currentUserId = null;
+
+        // Toggle password visibility
+        function togglePassword(fieldId) {
+            const field = document.getElementById(fieldId);
+            const toggle = field.nextElementSibling;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                toggle.textContent = '🙈';
+            } else {
+                field.type = 'password';
+                toggle.textContent = '👁️';
+            }
+        }
+
+        // Registration and simple login functions removed - production only
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Show loading
+        function showLoading(show = true) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('loginBtn').disabled = show;
+            // Signup button removed - production only
+        }
+
+        // Handle login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoading(true);
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    credentials: 'include',  // Include cookies
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        email,
+                        password,
+                        useSupabase: useSupabaseAuth
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (result.requires2FASetup) {
+                        // First-time user needs to set up 2FA
+                        document.getElementById('qrCodeContainer').innerHTML = 
+                            `<img src="${result.qrCode}" alt="QR Code">`;
+                        document.getElementById('tfaSetupModal').style.display = 'flex';
+                        currentSessionToken = result.sessionToken;
+                        currentUserId = result.user.id;
+                        showLoading(false);
+                    } else if (result.requires2FA) {
+                        // Show 2FA verification modal
+                        currentSessionToken = result.sessionToken;
+                        currentUserId = result.user.id;
+                        document.getElementById('tfaVerifyModal').style.display = 'flex';
+                        showLoading(false);
+                    } else {
+                        // Login successful
+                        if (result.session) {
+                            localStorage.setItem('session', JSON.stringify(result.session));
+                        }
+                        window.location.href = '/';
+                    }
+                } else {
+                    showError(result.error || 'שגיאה בהתחברות');
+                    showLoading(false);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showError('שגיאת חיבור לשרת');
+                showLoading(false);
+            }
+        });
+
+        // Signup handler removed - users added manually through Supabase
+        /* document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoading(true);
+
+            const fullName = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+
+            try {
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        fullName,
+                        email,
+                        password
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (result.requires2FASetup) {
+                        // Show 2FA setup modal with QR code
+                        document.getElementById('qrCodeContainer').innerHTML = 
+                            `<img src="${result.qrCode}" alt="QR Code">`;
+                        document.getElementById('tfaSetupModal').style.display = 'flex';
+                        currentUserId = result.user.id;
+                        showLoading(false);
+                    } else {
+                        alert('החשבון נוצר בהצלחה! אנא התחבר.');
+                        switchToLogin();
+                        showLoading(false);
+                    }
+                } else {
+                    showError(result.error || 'שגיאה ביצירת חשבון');
+                    showLoading(false);
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                showError('שגיאת חיבור לשרת');
+                showLoading(false);
+            }
+        }); */
+
+        // Verify 2FA setup
+        async function verifyTFA() {
+            const code = document.getElementById('tfaCode').value;
+            
+            if (code.length !== 6) {
+                showError('אנא הזן קוד בן 6 ספרות');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/verify-2fa', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        userId: currentUserId,
+                        token: code,
+                        sessionToken: currentSessionToken,
+                        isFirstTimeSetup: true
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('אימות דו-שלבי הופעל בהצלחה!');
+                    document.getElementById('tfaSetupModal').style.display = 'none';
+                    // Login successful after 2FA setup
+                    if (result.session) {
+                        localStorage.setItem('session', JSON.stringify(result.session));
+                    }
+                    window.location.href = '/';
+                } else {
+                    showError('קוד שגוי, נסה שוב');
+                }
+            } catch (error) {
+                console.error('2FA setup error:', error);
+                showError('שגיאה בהגדרת אימות דו-שלבי');
+            }
+        }
+
+        // Submit 2FA verification for login
+        async function submitTFAVerification() {
+            const code = document.getElementById('tfaVerifyCode').value;
+            
+            if (code.length !== 6) {
+                showError('אנא הזן קוד בן 6 ספרות');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/verify-2fa', {
+                    method: 'POST',
+                    credentials: 'include',  // Include cookies
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        userId: currentUserId,
+                        token: code,
+                        sessionToken: currentSessionToken
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    localStorage.setItem('session', JSON.stringify(result.session));
+                    window.location.href = '/';
+                } else {
+                    showError('קוד שגוי, נסה שוב');
+                }
+            } catch (error) {
+                console.error('2FA verification error:', error);
+                showError('שגיאה באימות');
+            }
+        }
+
+        // Skip 2FA setup (for testing)
+        function skipTFA() {
+            document.getElementById('tfaSetupModal').style.display = 'none';
+            alert('אימות דו-שלבי לא הופעל. תוכל להפעיל מאוחר יותר בהגדרות.');
+            // Refresh page to start login again
+            window.location.reload();
+        }
+
+        // Check if we're in development mode
+        fetch('/api/auth/mode')
+            .then(res => res.json())
+            .then(data => {
+                useSupabaseAuth = data.useSupabase;
+                // Production mode only - no simple auth fallback
+            })
+            .catch(() => {
+                // Production mode - stay with Supabase auth
+                useSupabaseAuth = true;
+            });
+    </script>
+</body>
+</html>
