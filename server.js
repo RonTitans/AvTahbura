@@ -182,7 +182,8 @@ app.use((req, res, next) => {
 });
 
 // Serve static files (including login.html) - this will handle login.html properly
-app.use(express.static('public'));
+const publicPath = process.env.VERCEL ? './public' : 'public';
+app.use(express.static(publicPath));
 
 // Root route - redirect to login
 app.get('/', (req, res) => {
