@@ -3,8 +3,8 @@
  * Implements Exact → BM25 → Vector reranking pipeline
  */
 
-const { normalizeHebrew, extractNGrams } = require('./normalizer');
-const { analyzeQuery } = require('./analyzer');
+import { normalizeHebrew, extractNGrams } from './normalizer.js';
+import { analyzeQuery } from './analyzer.js';
 
 /**
  * Calculate cosine similarity between vectors
@@ -249,7 +249,7 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   };
 }
 
-module.exports = {
+export {
   cosineSimilarity,
   exactMatch,
   bm25Score,

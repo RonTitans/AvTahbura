@@ -200,7 +200,7 @@ function buildDocumentText(row) {
   return parts.join(' · ');
 }
 
-module.exports = {
+export {
   normalizeHebrew,
   extractBusLines,
   cleanBoilerplate,

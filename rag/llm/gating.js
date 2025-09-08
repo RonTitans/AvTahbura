@@ -3,6 +3,8 @@
  * Determines when to skip LLM calls to reduce costs
  */
 
+import { normalizeHebrew } from '../core/normalizer.js';
+
 /**
  * Determine if LLM should be skipped
  * @param {object} retrievalResult - Result from hybrid retrieval
@@ -163,9 +165,7 @@ function calculateGatingMetrics(decisions) {
   };
 }
 
-const { normalizeHebrew } = require('../core/normalizer');
-
-module.exports = {
+export {
   shouldSkipLLM,
   prepareSnippets,
   formatDirectResponse,

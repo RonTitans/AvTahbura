@@ -3,6 +3,8 @@
  * Generates comprehensive answers from retrieved snippets
  */
 
+import { prepareSnippets } from './gating.js';
+
 /**
  * Create synthesis prompt for GPT-4
  * @param {string} query - User query
@@ -74,7 +76,6 @@ async function synthesizeResponse(query, retrievalResult, openai, options = {}) 
     timeout = 15000
   } = options;
   
-  const { prepareSnippets } = require('./gating');
   const snippets = prepareSnippets(retrievalResult.results, maxSnippets);
   const prompt = createSynthesisPrompt(query, snippets, retrievalResult.queryAnalysis);
   
@@ -199,7 +200,7 @@ function formatMatchReasons(queryAnalysis, results) {
   return reasons;
 }
 
-module.exports = {
+export {
   createSynthesisPrompt,
   synthesizeResponse,
   formatMatchReasons

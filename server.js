@@ -15,6 +15,13 @@ import {
   ConversationContext,
   initializeGPTImprovements
 } from './gpt-improvements.js';
+
+// Import RAG modules (converted to ES modules)
+import { normalizeHebrew, extractBusLines } from './rag/core/normalizer.js';
+import { analyzeQuery } from './rag/core/analyzer.js';
+import { hybridRetrieve as hybridRetrieval } from './rag/core/retriever.js';
+import { shouldSkipLLM as shouldUseLLM } from './rag/llm/gating.js';
+import { synthesizeResponse } from './rag/llm/synthesis.js';
 import integrationsRouter from './routes/integrations.js';
 import authSupabaseRouter from './routes/auth-supabase.js';
 import { loadConfig } from './utils/encryption.js';
@@ -731,7 +738,7 @@ function extractStreetNames(text) {
 }
 
 // Smart Query Analyzer - Extract components from user query
-function analyzeQuery(text) {
+function analyzeQueryLocal(text) {
   const analysis = {
     busLines: [],
     locations: [],
@@ -817,7 +824,7 @@ function analyzeQuery(text) {
 function findSmartMatches(inquiryText, municipalData, maxResults = 10) {
   console.log(`\n🧠 Smart Search for: "${inquiryText}"`);
   
-  const queryAnalysis = analyzeQuery(inquiryText);
+  const queryAnalysis = analyzeQueryLocal(inquiryText);
   console.log('📊 Query Analysis:', queryAnalysis);
   
   const scoredMatches = [];
@@ -866,7 +873,7 @@ function findSmartMatches(inquiryText, municipalData, maxResults = 10) {
     // Score for problem type match (20% weight)
     if (queryAnalysis.problemType) {
       // Check if entry has same problem type
-      const entryAnalysis = analyzeQuery(combinedText);
+      const entryAnalysis = analyzeQueryLocal(combinedText);
       if (entryAnalysis.problemType === queryAnalysis.problemType) {
         score += 0.2;
         matchReasons.push(`סוג: ${queryAnalysis.problemType}`);
@@ -1879,17 +1886,6 @@ app.post('/smart-search', async (req, res) => {
 
     console.log(`\n🎯 Smart Search initiated for: "${inquiry_text}"`);
     
-    // Temporarily bypass RAG modules while we convert them to ES modules
-    // TODO: Import RAG modules properly after conversion
-    /*
-    const { normalizeHebrew, extractBusLines } = require('./rag/core/normalizer.js');
-    const { analyzeQuery } = require('./rag/core/analyzer.js');
-    const { hybridRetrieval } = require('./rag/core/retriever.js');
-    const { shouldUseLLM } = require('./rag/llm/gating.js');
-    const { synthesizeResponse } = require('./rag/llm/synthesis.js');
-    */
-    
-    // For now, return a simple response while we fix the RAG modules
     // Check if OpenAI is available
     if (!openaiAvailable || !openai) {
       console.log('❌ OpenAI not available for smart search');
@@ -1900,80 +1896,49 @@ app.post('/smart-search', async (req, res) => {
       });
     }
     
-    // Temporary response while RAG is being fixed
-    return res.json({
-      success: true,
-      inquiry: inquiry_text,
-      answer: `Processing query: "${inquiry_text}". Smart search with RAG is being restored.`,
-      confidence: 0.5,
-      sources: [],
-      method: 'temporary_fix',
-      message: 'Smart search endpoint restored, RAG integration in progress'
-    });
-    
-    /* RAG code temporarily disabled while converting modules
     // Step 1: Analyze query
     const analysis = analyzeQuery(inquiry_text);
     console.log('📝 Query analysis:', {
-      lines: analysis.busLines,
-      locations: analysis.locations,
+      lines: analysis.entities.busLines,
+      locations: analysis.entities.locations,
+      topic: analysis.entities.topic,
       type: analysis.queryType
     });
     
     // Step 2: Hybrid retrieval
-    const retrievalResults = await hybridRetrieval(inquiry_text, municipalData, {
-      openai: openaiAvailable ? openai : null,
-      embeddings: embeddingsReady ? embeddings : null
+    const retrievalResults = await hybridRetrieval(inquiry_text, municipalData, openai, {
+      embeddingsReady: embeddingsReady,
+      queryAnalysis: analysis
     });
     
-    console.log(`📊 Retrieved ${retrievalResults.matches.length} matches via ${retrievalResults.method}`);
+    console.log(`📊 Retrieved ${retrievalResults.results.length} matches via ${retrievalResults.method}`);
     
     // Step 3: Check if we should use LLM
-    const useLLM = shouldUseLLM(retrievalResults);
+    const gatingDecision = shouldUseLLM(retrievalResults);
     
-    if (!useLLM.shouldUse) {
-      console.log(`⚡ Skipping LLM: ${useLLM.reason}`);
-      const topMatch = retrievalResults.matches[0];
+    if (gatingDecision.skip) {
+      console.log(`⚡ Skipping LLM: ${gatingDecision.reason}`);
+      const { formatDirectResponse } = await import('./rag/llm/gating.js');
+      const directResponse = formatDirectResponse(retrievalResults.results[0], gatingDecision);
+      
       return res.json({
         success: true,
         inquiry: inquiry_text,
-        answer: topMatch.response_text,
-        confidence: retrievalResults.confidence,
-        sources: retrievalResults.matches.slice(0, 3).map(m => ({
-          case_id: m.case_id,
-          row_number: m.row_number,
-          relevance: m.score,
-          reason: m.matchType
-        })),
-        method: `${retrievalResults.method}_no_llm`,
+        answer: directResponse.answer,
+        confidence: directResponse.confidence,
+        sources: directResponse.sources,
+        method: directResponse.method,
         llm_skipped: true,
-        skip_reason: useLLM.reason
+        skip_reason: directResponse.skipReason
       });
     }
     
-    // Step 4: Synthesize with LLM if available
-    if (!openaiAvailable || !openai) {
-      console.log('⚠️ OpenAI not available, returning best match');
-      const topMatch = retrievalResults.matches[0];
-      return res.json({
-        success: true,
-        inquiry: inquiry_text,
-        answer: topMatch ? topMatch.response_text : 'לא נמצאו תוצאות מתאימות',
-        confidence: retrievalResults.confidence,
-        sources: retrievalResults.matches.slice(0, 3).map(m => ({
-          case_id: m.case_id,
-          row_number: m.row_number,
-          relevance: m.score
-        })),
-        method: `${retrievalResults.method}_no_openai`
-      });
-    }
-    
-    // Use LLM to synthesize response
+    // Step 4: Synthesize with LLM
     const synthesis = await synthesizeResponse(
       inquiry_text,
-      retrievalResults.matches,
-      openai
+      retrievalResults,
+      openai,
+      { maxSnippets: 5 }
     );
     
     return res.json({
@@ -1982,15 +1947,14 @@ app.post('/smart-search', async (req, res) => {
       answer: synthesis.answer,
       confidence: synthesis.confidence,
       sources: synthesis.sources,
-      method: `${retrievalResults.method}_${synthesis.model}`,
+      method: synthesis.method,
       search_info: {
         retrieval_method: retrievalResults.method,
-        matches_found: retrievalResults.matches.length,
-        llm_used: true,
+        matches_found: retrievalResults.results.length,
+        llm_used: synthesis.llmUsed,
         model: synthesis.model
       }
     });
-    */ // End of temporarily disabled RAG code
     
   } catch (error) {
     console.error('❌ Error in smart-search:', error);

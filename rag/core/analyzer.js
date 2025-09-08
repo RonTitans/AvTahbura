@@ -3,11 +3,11 @@
  * Extracts entities and classifies queries for optimal retrieval
  */
 
-const { normalizeHebrew, extractBusLines, extractNGrams } = require('./normalizer');
-const locations = require('../dictionaries/locations.json');
-const operators = require('../dictionaries/operators.json');
-const topics = require('../dictionaries/topics.json');
-const stopwords = require('../dictionaries/stopwords.json');
+import { normalizeHebrew, extractBusLines, extractNGrams } from './normalizer.js';
+import locations from '../dictionaries/locations.json' with { type: 'json' };
+import operators from '../dictionaries/operators.json' with { type: 'json' };
+import topics from '../dictionaries/topics.json' with { type: 'json' };
+import stopwords from '../dictionaries/stopwords.json' with { type: 'json' };
 
 /**
  * Extract location entities from text with fuzzy matching
@@ -274,7 +274,7 @@ function querySimilarity(analysis1, analysis2) {
   return factors > 0 ? score / factors : 0;
 }
 
-module.exports = {
+export {
   extractLocations,
   extractOperators,
   classifyTopic,
