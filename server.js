@@ -152,8 +152,7 @@ app.use('/api/auth', authSupabaseRouter);
 // Apply authentication middleware with proper exclusions
 app.use((req, res, next) => {
   // Skip auth for login pages, auth APIs, exact search, and static assets
-  if (req.path === '/login.html' || 
-      req.path === '/login-new.html' ||
+  if (req.path === '/login-new.html' ||
       req.path.startsWith('/api/') ||
       req.path === '/health' ||
       req.path === '/data-sample' ||
@@ -1866,7 +1865,7 @@ app.post('/search-by-ticket', async (req, res) => {
 });
 
 // NEW: Smart Search with GPT-4 Validation endpoint
-// Smart Search endpoint - REPLACED WITH RAG SYSTEM
+// Smart Search endpoint - Using RAG System
 app.post('/smart-search', async (req, res) => {
   try {
     const { inquiry_text } = req.body;
@@ -1878,8 +1877,9 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    console.log(`\n🎯 RAG Search initiated for: "${inquiry_text}"`);
-
+    console.log(`\n🎯 Smart Search (RAG) initiated for: "${inquiry_text}"`);
+    
+    // For now, use simplified logic until RAG modules are fully tested
     // Import RAG modules
     const { normalizeHebrew, extractBusLines } = await import('./rag/core/normalizer.js');
     const { analyzeQuery } = await import('./rag/core/analyzer.js');
