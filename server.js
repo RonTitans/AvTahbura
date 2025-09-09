@@ -2076,10 +2076,15 @@ app.post('/api/rag-refresh', async (req, res) => {
       });
     }
     
-    // Load data from Google Sheets
+    // Load data from Google Sheets with limit for Vercel timeout
+    const maxRows = parseInt(req.query.limit || '500'); // Default 500 rows
+    const skipEmbeddings = req.query.skipEmbeddings === 'true';
+    
     await loadDataFromSheets(); // This loads into global municipalData
-    const rawData = municipalData; // Get from global variable
-    console.log(`✅ Loaded ${rawData?.length || 0} rows from Google Sheets`);
+    const allData = municipalData || [];
+    const rawData = allData.slice(0, maxRows); // Limit to prevent timeout
+    
+    console.log(`✅ Processing ${rawData.length} rows (out of ${allData.length} total)`);
     
     if (!rawData || rawData.length === 0) {
       return res.status(500).json({
@@ -2088,9 +2093,9 @@ app.post('/api/rag-refresh', async (req, res) => {
       });
     }
     
-    // Build index pack
-    console.log('📦 Building index pack...');
-    const indexPack = await buildIndexPack(rawData, openai, null);
+    // Build index pack (optionally without embeddings for speed)
+    console.log(`📦 Building index pack${skipEmbeddings ? ' (no embeddings)' : ''}...`);
+    const indexPack = await buildIndexPack(rawData, skipEmbeddings ? null : openai, null);
     
     if (!indexPack || !indexPack.documents) {
       return res.status(500).json({
@@ -2113,7 +2118,10 @@ app.post('/api/rag-refresh', async (req, res) => {
         message: 'Index pack refreshed and uploaded',
         stats: {
           documents: indexPack.documents.length,
-          uploadedAt: uploadResult.timestamp
+          totalRows: allData.length,
+          processedRows: rawData.length,
+          uploadedAt: uploadResult.timestamp,
+          skippedEmbeddings: skipEmbeddings
         }
       });
     } else {
