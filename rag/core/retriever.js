@@ -206,8 +206,8 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   // Analyze query
   const queryAnalysis = analyzeQuery(query);
   console.log(`🔍 Query analysis:`, {
-    lines: queryAnalysis.entities.busLines,
-    locations: queryAnalysis.entities.locations,
+    lines: queryAnalysis.entities?.busLines || [],
+    locations: queryAnalysis.entities?.locations || [],
     type: queryAnalysis.queryType
   });
   
