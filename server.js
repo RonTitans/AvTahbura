@@ -1961,13 +1961,21 @@ app.post('/smart-search', async (req, res) => {
     }
     
     // Return response matching UI expectations
+    const sources = response.sources || [];
     return res.json({
       success: true,
       inquiry: inquiry_text,
       answer: response.answer,
       confidence: response.confidence,
-      sources: response.sources || [],
-      method: response.method || retrievalResult.method
+      sources: sources,
+      source_rows: sources.map(s => s.rowNumber || s.row_number).filter(Boolean),
+      method: response.method || retrievalResult.method,
+      candidates_evaluated: retrievalResult.results?.length || 5,
+      search_info: {
+        candidates_validated: retrievalResult.results?.length || 5,
+        retrieval_method: retrievalResult.method,
+        llm_used: !gatingDecision.skip
+      }
     });
     
   } catch (error) {
