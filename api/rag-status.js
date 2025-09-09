@@ -5,7 +5,7 @@
 
 import { getCache, estimateMemoryUsage } from '../rag/storage/cache.js';
 import { checkIndexPack } from '../rag/storage/blob.js';
-import { getMetrics } from './recommend.js';
+import { getMetrics } from './rag-recommend.js';
 
 /**
  * Main status handler
