@@ -126,11 +126,11 @@ function bm25Score(queryAnalysis, indexPack, topN = 20) {
       (queryAnalysis.entities?.topic === doc.entities?.topic ? 1 : 0);
     
     // BM25 term scoring
-    const queryTerms = queryAnalysis.keywords;
+    const queryTerms = queryAnalysis.keywords || [];
     queryTerms.forEach(term => {
       const termNorm = normalizeHebrew(term);
-      const tf = doc.tokens.filter(t => t === termNorm).length;
-      if (tf > 0) {
+      const tf = doc.tokens?.filter(t => t === termNorm).length || 0;
+      if (tf > 0 && termDocFreq) {
         const idf = Math.log((documents.length - (termDocFreq[termNorm] || 0) + 0.5) / 
                             ((termDocFreq[termNorm] || 0) + 0.5));
         const docLengthNorm = doc.tokens.length / avgDocLength;
