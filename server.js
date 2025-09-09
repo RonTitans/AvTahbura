@@ -43,7 +43,10 @@ const PORT = process.env.PORT || 8009;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ type: 'application/json' }));
+app.use(express.json({ 
+  type: ['application/json', 'application/json; charset=utf-8'],
+  limit: '10mb'
+}));
 app.use(express.text({ type: 'text/plain' }));
 app.use(cookieParser());
 
@@ -2148,9 +2151,14 @@ app.post('/api/rag-refresh', async (req, res) => {
 
 // RAG Recommend endpoint - Enhanced search
 app.post('/api/rag-recommend', async (req, res) => {
+  // Set UTF-8 response headers
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  
   try {
     const { query, inquiry_text } = req.body;
     const searchQuery = query || inquiry_text;
+    
+    console.log('🔍 Search query received:', searchQuery);
     
     if (!searchQuery) {
       return res.status(400).json({

@@ -34,18 +34,24 @@ function exactMatch(queryAnalysis, indexPack) {
   const { documents, indices } = indexPack;
   const queryNgrams = new Set(queryAnalysis.ngrams);
   
+  // Ensure indices exist
+  if (!indices) {
+    console.warn('⚠️ No indices found in index pack');
+    return matches;
+  }
+  
   // Check for line + location AND filter
   if (queryAnalysis.metadata.hasExactLineLocation) {
     const lineDocIds = new Set();
     queryAnalysis.entities.busLines.forEach(line => {
-      const docs = indices.busLines[line] || [];
+      const docs = indices.busLines?.[line] || [];
       docs.forEach(id => lineDocIds.add(id));
     });
     
     const locationDocIds = new Set();
     queryAnalysis.entities.locations.forEach(loc => {
       const normalized = normalizeHebrew(loc);
-      const docs = indices.locations[normalized] || [];
+      const docs = indices.locations?.[normalized] || [];
       docs.forEach(id => locationDocIds.add(id));
     });
     
@@ -94,23 +100,30 @@ function exactMatch(queryAnalysis, indexPack) {
  */
 function bm25Score(queryAnalysis, indexPack, topN = 20) {
   const { documents, tfIdf, termDocFreq } = indexPack;
+  
+  // Check if required data exists
+  if (!documents || documents.length === 0) {
+    console.warn('⚠️ No documents found for BM25 scoring');
+    return [];
+  }
+  
   const k1 = 1.2;
   const b = 0.75;
-  const avgDocLength = documents.reduce((sum, doc) => sum + doc.tokens.length, 0) / documents.length;
+  const avgDocLength = documents.reduce((sum, doc) => sum + (doc.tokens?.length || 0), 0) / documents.length;
   
   const scores = documents.map((doc, docId) => {
     let score = 0;
     
-    // Entity matching with adaptive weights
+    // Entity matching with adaptive weights (with safe navigation)
     const entityScore = 
-      queryAnalysis.entities.busLines.filter(line => doc.entities.busLines.includes(line)).length * 3 +
-      queryAnalysis.entities.locations.filter(loc => 
-        doc.entities.locations.some(docLoc => normalizeHebrew(docLoc) === normalizeHebrew(loc))
-      ).length * 2 +
-      queryAnalysis.entities.operators.filter(op => 
-        doc.entities.operators.some(docOp => normalizeHebrew(docOp) === normalizeHebrew(op))
-      ).length * 1 +
-      (queryAnalysis.entities.topic === doc.entities.topic ? 1 : 0);
+      (queryAnalysis.entities?.busLines?.filter(line => doc.entities?.busLines?.includes(line))?.length || 0) * 3 +
+      (queryAnalysis.entities?.locations?.filter(loc => 
+        doc.entities?.locations?.some(docLoc => normalizeHebrew(docLoc) === normalizeHebrew(loc))
+      )?.length || 0) * 2 +
+      (queryAnalysis.entities?.operators?.filter(op => 
+        doc.entities?.operators?.some(docOp => normalizeHebrew(docOp) === normalizeHebrew(op))
+      )?.length || 0) * 1 +
+      (queryAnalysis.entities?.topic === doc.entities?.topic ? 1 : 0);
     
     // BM25 term scoring
     const queryTerms = queryAnalysis.keywords;
