@@ -1979,6 +1979,50 @@ app.post('/smart-search', async (req, res) => {
 // NEW RAG ENDPOINTS
 // ============================================
 
+// Routes manifest endpoint
+app.get('/api/_routes', (req, res) => {
+  const routes = [
+    { path: '/api/rag-status', method: 'GET', description: 'System health and metrics' },
+    { path: '/api/rag-refresh', method: 'POST', description: 'Rebuild search index from Google Sheets' },
+    { path: '/api/rag-recommend', method: 'POST', description: 'Main RAG search endpoint' },
+    { path: '/api/env-check', method: 'GET', description: 'Environment validation' },
+    { path: '/api/_routes', method: 'GET', description: 'This manifest' }
+  ];
+
+  res.json({
+    framework: 'express-on-vercel',
+    module_type: 'ES modules',
+    available_routes: routes,
+    environment: {
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      has_openai: !!process.env.OPENAI_API_KEY,
+      has_blob: !!process.env.BLOB_READ_WRITE_TOKEN,
+      has_sheets: !!process.env.GOOGLE_CREDENTIALS_JSON
+    }
+  });
+});
+
+// Environment validation endpoint
+app.get('/api/env-check', (req, res) => {
+  const required = {
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN ? '✅ Configured' : '❌ Missing',
+    SPREADSHEET_ID: process.env.SPREADSHEET_ID ? '✅ Configured' : '❌ Missing',
+    GOOGLE_CREDENTIALS_JSON: process.env.GOOGLE_CREDENTIALS_JSON ? '✅ Configured' : '⚠️ Missing',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✅ Configured' : '⚠️ Optional'
+  };
+  
+  const hasGoogleAuth = !!process.env.GOOGLE_CREDENTIALS_JSON;
+  const systemReady = hasGoogleAuth && process.env.BLOB_READ_WRITE_TOKEN && process.env.SPREADSHEET_ID;
+  
+  res.json({
+    status: systemReady ? 'ready' : 'not_ready',
+    configuration: required,
+    next_steps: systemReady ? 
+      ['POST /api/rag-refresh to build index', 'POST /api/rag-recommend to test search'] :
+      'Configure missing environment variables in Vercel dashboard'
+  });
+});
+
 // RAG Status endpoint
 app.get('/api/rag-status', async (req, res) => {
   try {
