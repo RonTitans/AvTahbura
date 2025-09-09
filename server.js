@@ -2158,7 +2158,7 @@ app.post('/api/rag-recommend', async (req, res) => {
     const { query, inquiry_text } = req.body;
     const searchQuery = query || inquiry_text;
     
-    console.log('🔍 Search query received:', searchQuery);
+    console.log(`🔍 Search query received: "${searchQuery}" (type: ${typeof searchQuery}, length: ${searchQuery?.length})`);
     
     if (!searchQuery) {
       return res.status(400).json({
