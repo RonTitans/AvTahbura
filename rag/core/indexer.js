@@ -175,11 +175,15 @@ export async function processDocuments(rawData, previousHashes = {}) {
     // Tokenize for TF-IDF
     const tokens = normalizedText.split(/\s+/).filter(t => t.length > 1);
     
+    // IMPORTANT: Use the actual row_number from the data if available
+    // This ensures consistency with how municipalData stores row numbers
+    const actualRowNumber = row.row_number !== undefined ? row.row_number : (index + 2);
+    
     // Create document object
     const doc = {
       id: index,
       caseId: caseId,
-      rowNumber: index + 2, // Excel row number (1-indexed + header)
+      rowNumber: actualRowNumber, // Use actual row number from data
       hash: hash,
       
       // Original text fields

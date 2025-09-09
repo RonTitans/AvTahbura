@@ -40,32 +40,45 @@ function exactMatch(queryAnalysis, indexPack) {
     return matches;
   }
   
-  // Check for line + location AND filter
-  if (queryAnalysis.metadata.hasExactLineLocation) {
+  // Check for exact bus line matches (with or without location)
+  if (queryAnalysis.entities.busLines && queryAnalysis.entities.busLines.length > 0) {
     const lineDocIds = new Set();
     queryAnalysis.entities.busLines.forEach(line => {
       const docs = indices.busLines?.[line] || [];
       docs.forEach(id => lineDocIds.add(id));
     });
     
-    const locationDocIds = new Set();
-    queryAnalysis.entities.locations.forEach(loc => {
-      const normalized = normalizeHebrew(loc);
-      const docs = indices.locations?.[normalized] || [];
-      docs.forEach(id => locationDocIds.add(id));
-    });
-    
-    // Intersection of line and location matches
-    const intersection = [...lineDocIds].filter(id => locationDocIds.has(id));
-    
-    intersection.forEach(docId => {
-      matches.push({
-        docId,
-        score: 1.0,
-        matchType: 'exact_line_location',
-        document: documents[docId]
+    if (queryAnalysis.entities.locations && queryAnalysis.entities.locations.length > 0) {
+      // If we have locations too, find intersection
+      const locationDocIds = new Set();
+      queryAnalysis.entities.locations.forEach(loc => {
+        const normalized = normalizeHebrew(loc);
+        const docs = indices.locations?.[normalized] || [];
+        docs.forEach(id => locationDocIds.add(id));
       });
-    });
+      
+      // Intersection of line and location matches
+      const intersection = [...lineDocIds].filter(id => locationDocIds.has(id));
+      
+      intersection.forEach(docId => {
+        matches.push({
+          docId,
+          score: 1.0,
+          matchType: 'exact_line_location',
+          document: documents[docId]
+        });
+      });
+    } else {
+      // Just bus line matches
+      lineDocIds.forEach(docId => {
+        matches.push({
+          docId,
+          score: 0.9, // Slightly lower than line+location
+          matchType: 'exact_line',
+          document: documents[docId]
+        });
+      });
+    }
   }
   
   // Check for exact phrase matches
