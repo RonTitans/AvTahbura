@@ -1885,7 +1885,10 @@ app.post('/search-by-ticket', async (req, res) => {
 
 // NEW: Smart Search with GPT-4 Validation endpoint
 // Smart Search endpoint - Using RAG System
+// Smart Search endpoint - Now redirects to RAG system
 app.post('/smart-search', async (req, res) => {
+  console.log('🔄 Smart search redirecting to RAG system');
+  
   try {
     const { inquiry_text } = req.body;
     
@@ -1896,76 +1899,75 @@ app.post('/smart-search', async (req, res) => {
       });
     }
 
-    console.log(`\n🎯 Smart Search initiated for: "${inquiry_text}"`);
+    console.log(`🎯 Smart Search for: "${inquiry_text}"`);
     
-    // Check if OpenAI is available
-    if (!openaiAvailable || !openai) {
-      console.log('❌ OpenAI not available for smart search');
+    // Call the RAG recommend endpoint
+    const cache = getCache();
+    let indexPack = cache.get();
+    
+    if (!indexPack && process.env.BLOB_READ_WRITE_TOKEN) {
+      console.log('📥 Loading index from Blob...');
+      const downloaded = await downloadIndexPack();
+      if (downloaded && !downloaded.unchanged) {
+        cache.set(downloaded, downloaded.etag);
+        indexPack = downloaded;
+      }
+    }
+    
+    if (!indexPack) {
       return res.status(503).json({
-        error: 'Smart search requires OpenAI to be configured',
-        fallback_suggestion: 'Please use regular search mode',
-        success: false
+        success: false,
+        error: 'Index not available. Please wait for system initialization.',
+        fallback_suggestion: 'נסו שוב בעוד מספר דקות'
       });
     }
     
-    // Step 1: Analyze query
-    const analysis = analyzeQuery(inquiry_text);
-    console.log('📝 Query analysis:', {
-      lines: analysis.entities.busLines,
-      locations: analysis.entities.locations,
-      topic: analysis.entities.topic,
-      type: analysis.queryType
-    });
-    
-    // Step 2: Hybrid retrieval
-    const retrievalResults = await hybridRetrieval(inquiry_text, municipalData, openai, {
-      embeddingsReady: embeddingsReady,
-      queryAnalysis: analysis
-    });
-    
-    console.log(`📊 Retrieved ${retrievalResults.results.length} matches via ${retrievalResults.method}`);
-    
-    // Step 3: Check if we should use LLM
-    const gatingDecision = shouldUseLLM(retrievalResults);
-    
-    if (gatingDecision.skip) {
-      console.log(`⚡ Skipping LLM: ${gatingDecision.reason}`);
-      const { formatDirectResponse } = await import('./rag/llm/gating.js');
-      const directResponse = formatDirectResponse(retrievalResults.results[0], gatingDecision);
-      
+    // Perform hybrid retrieval
+    let retrievalResult;
+    try {
+      retrievalResult = await hybridRetrieval(inquiry_text, indexPack, openai, { maxResults: 5 });
+    } catch (retrievalError) {
+      console.error('Retrieval error:', retrievalError);
       return res.json({
         success: true,
         inquiry: inquiry_text,
-        answer: directResponse.answer,
-        confidence: directResponse.confidence,
-        sources: directResponse.sources,
-        method: directResponse.method,
-        llm_skipped: true,
-        skip_reason: directResponse.skipReason
+        answer: 'מצטערים, אירעה שגיאה בחיפוש. אנא נסו שוב.',
+        confidence: 0.1,
+        sources: []
       });
     }
     
-    // Step 4: Synthesize with LLM
-    const synthesis = await synthesizeResponse(
-      inquiry_text,
-      retrievalResults,
-      openai,
-      { maxSnippets: 5 }
-    );
+    // Check if we have results
+    if (!retrievalResult || !retrievalResult.results || retrievalResult.results.length === 0) {
+      return res.json({
+        success: true,
+        inquiry: inquiry_text,
+        answer: 'לא נמצאו תוצאות רלוונטיות לשאילתה.',
+        confidence: 0.5,
+        sources: []
+      });
+    }
     
+    // Check if we can skip LLM
+    const gatingDecision = shouldUseLLM(retrievalResult);
+    
+    let response;
+    if (gatingDecision.skip) {
+      response = formatDirectResponse(retrievalResult.results[0], gatingDecision);
+    } else if (openai) {
+      response = await synthesizeResponse(inquiry_text, retrievalResult, openai);
+    } else {
+      response = formatDirectResponse(retrievalResult.results[0], { confidence: 0.6 });
+    }
+    
+    // Return response matching UI expectations
     return res.json({
       success: true,
       inquiry: inquiry_text,
-      answer: synthesis.answer,
-      confidence: synthesis.confidence,
-      sources: synthesis.sources,
-      method: synthesis.method,
-      search_info: {
-        retrieval_method: retrievalResults.method,
-        matches_found: retrievalResults.results.length,
-        llm_used: synthesis.llmUsed,
-        model: synthesis.model
-      }
+      answer: response.answer,
+      confidence: response.confidence,
+      sources: response.sources || [],
+      method: response.method || retrievalResult.method
     });
     
   } catch (error) {
