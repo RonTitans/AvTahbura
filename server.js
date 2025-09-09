@@ -2078,10 +2078,25 @@ app.post('/api/rag-refresh', async (req, res) => {
     
     // Load data from Google Sheets (reuse existing function)
     const rawData = await loadDataFromSheets();
+    console.log(`✅ Loaded ${rawData?.length || 0} rows from Google Sheets`);
+    
+    if (!rawData || rawData.length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'No data loaded from Google Sheets'
+      });
+    }
     
     // Build index pack
     console.log('📦 Building index pack...');
     const indexPack = await buildIndexPack(rawData, openai, null);
+    
+    if (!indexPack || !indexPack.documents) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to build index pack - invalid structure'
+      });
+    }
     
     // Upload to blob if configured
     if (process.env.BLOB_READ_WRITE_TOKEN) {
