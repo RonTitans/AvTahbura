@@ -3,10 +3,10 @@
  * Handles upload, download, and versioning of RAG index packs
  */
 
-const { put, head, list, del } = require('@vercel/blob');
-const crypto = require('crypto');
+import { put, head, list, del } from '@vercel/blob';
+import crypto from 'crypto';
 
-const INDEX_PACK_PREFIX = 'rag-packs/';
+const INDEX_PACK_PREFIX = process.env.INDEX_PACK_PREFIX || 'rag-packs/';
 const METADATA_FILE = 'meta.json';
 const VECTORS_FILE = 'vectors.bin';
 const INDICES_FILE = 'indices.json';
@@ -16,7 +16,7 @@ const INDICES_FILE = 'indices.json';
  * @param {Buffer|string} content - Content to hash
  * @returns {string} ETag hash
  */
-function generateETag(content) {
+export function generateETag(content) {
   const hash = crypto.createHash('md5');
   if (Buffer.isBuffer(content)) {
     hash.update(content);
@@ -31,7 +31,7 @@ function generateETag(content) {
  * @param {object} indexPack - The index pack to upload
  * @returns {object} Upload result with URLs and ETags
  */
-async function uploadIndexPack(indexPack) {
+export async function uploadIndexPack(indexPack) {
   const timestamp = new Date().toISOString();
   const results = {};
   
@@ -142,7 +142,7 @@ async function uploadIndexPack(indexPack) {
  * @param {string} etag - Optional ETag to check for changes
  * @returns {object} Downloaded index pack or null if unchanged
  */
-async function downloadIndexPack(etag = null) {
+export async function downloadIndexPack(etag = null) {
   try {
     // Check metadata first
     const metaResponse = await fetch(`${process.env.BLOB_URL || ''}/${INDEX_PACK_PREFIX}${METADATA_FILE}`);
@@ -220,7 +220,7 @@ async function downloadIndexPack(etag = null) {
  * Check if Index Pack exists and get metadata
  * @returns {object} Pack metadata or null
  */
-async function checkIndexPack() {
+export async function checkIndexPack() {
   try {
     const response = await head(`${INDEX_PACK_PREFIX}${METADATA_FILE}`);
     if (response) {
@@ -247,7 +247,7 @@ async function checkIndexPack() {
  * Delete Index Pack from Blob storage
  * @returns {boolean} Success status
  */
-async function deleteIndexPack() {
+export async function deleteIndexPack() {
   try {
     const files = [
       `${INDEX_PACK_PREFIX}${METADATA_FILE}`,
@@ -273,7 +273,7 @@ async function deleteIndexPack() {
  * List all Index Packs in storage
  * @returns {array} List of pack metadata
  */
-async function listIndexPacks() {
+export async function listIndexPacks() {
   try {
     const { blobs } = await list({ prefix: INDEX_PACK_PREFIX });
     const packs = [];
@@ -306,7 +306,8 @@ async function listIndexPacks() {
   }
 }
 
-module.exports = {
+// Default export for convenience
+export default {
   uploadIndexPack,
   downloadIndexPack,
   checkIndexPack,

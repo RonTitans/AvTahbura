@@ -1,14 +1,14 @@
 /**
  * /api/recommend - Main RAG search endpoint
- * Replaces the old /smart-search endpoint with enhanced hybrid retrieval
+ * Implements hybrid retrieval with cold start loading and LLM gating
  */
 
-const { getCache, ensureIndexPack } = require('../rag/storage/cache');
-const { downloadIndexPack } = require('../rag/storage/blob');
-const { hybridRetrieve } = require('../rag/core/retriever');
-const { shouldSkipLLM, formatDirectResponse, prepareSnippets } = require('../rag/llm/gating');
-const { synthesizeResponse, formatMatchReasons } = require('../rag/llm/synthesis');
-const OpenAI = require('openai');
+import { getCache } from '../rag/storage/cache.js';
+import { downloadIndexPack } from '../rag/storage/blob.js';
+import { hybridRetrieve } from '../rag/core/retriever.js';
+import { shouldSkipLLM, formatDirectResponse, prepareSnippets } from '../rag/llm/gating.js';
+import { synthesizeResponse, formatMatchReasons } from '../rag/llm/synthesis.js';
+import OpenAI from 'openai';
 
 // Initialize OpenAI if available
 let openai = null;
@@ -18,7 +18,7 @@ if (process.env.OPENAI_API_KEY) {
   });
 }
 
-// Metrics tracking
+// Metrics tracking (module-level for persistence across invocations)
 const metrics = {
   total: 0,
   llmCalls: 0,
@@ -27,13 +27,22 @@ const metrics = {
   heuristicMatches: 0,
   vectorMatches: 0,
   errors: 0,
-  avgLatency: 0
+  avgLatency: 0,
+  lastReset: new Date().toISOString()
 };
 
 /**
- * Main recommendation endpoint handler
+ * Main handler for recommend endpoint
  */
-async function recommendHandler(req, res) {
+export default async function handler(req, res) {
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ 
+      success: false,
+      error: 'Method not allowed. Use POST.' 
+    });
+  }
+
   const startTime = Date.now();
   metrics.total++;
   
@@ -45,30 +54,54 @@ async function recommendHandler(req, res) {
     if (!searchQuery) {
       return res.status(400).json({
         success: false,
-        error: 'Missing query parameter'
+        error: 'Missing query parameter',
+        hint: 'Provide either "query" or "inquiry_text" in request body'
       });
     }
     
     console.log(`\n🔍 RAG Search: "${searchQuery}"`);
     
-    // Ensure Index Pack is loaded
-    const cache = getCache();
+    // Cold start: Ensure Index Pack is loaded
+    const cache = getCache(parseInt(process.env.INDEX_PACK_TTL || '300'));
     let indexPack = cache.get();
     
     if (!indexPack) {
-      console.log('📦 Loading Index Pack...');
-      const downloaded = await downloadIndexPack(cache.etag);
+      console.log('📦 Cold start - loading Index Pack from Blob...');
       
-      if (!downloaded || downloaded.unchanged) {
+      // Check for required blob token
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
         return res.status(503).json({
           success: false,
-          error: 'Index not available',
-          message: 'Please run /api/refresh to build the index'
+          error: 'System not configured',
+          message: 'BLOB_READ_WRITE_TOKEN missing. Contact administrator.',
+          fallback_suggestion: 'Please try again later'
         });
       }
       
-      cache.set(downloaded, downloaded.etag);
-      indexPack = downloaded;
+      try {
+        const downloaded = await downloadIndexPack(cache.etag);
+        
+        if (!downloaded || downloaded.unchanged) {
+          return res.status(503).json({
+            success: false,
+            error: 'Index not available',
+            message: 'Please run /api/refresh to build the index first',
+            fallback_suggestion: 'System is being initialized. Please try again in a few minutes.'
+          });
+        }
+        
+        cache.set(downloaded, downloaded.etag);
+        indexPack = downloaded;
+        console.log(`✅ Index Pack loaded (${indexPack.documents?.length || 0} documents)`);
+      } catch (loadError) {
+        console.error('❌ Failed to load Index Pack:', loadError);
+        return res.status(503).json({
+          success: false,
+          error: 'Failed to load search index',
+          message: loadError.message,
+          fallback_suggestion: 'Service temporarily unavailable. Please try again.'
+        });
+      }
     }
     
     // Perform hybrid retrieval
@@ -76,7 +109,10 @@ async function recommendHandler(req, res) {
       searchQuery, 
       indexPack, 
       openai,
-      { maxResults: 5 }
+      { 
+        maxResults: 5,
+        heuristicThreshold: parseFloat(process.env.HEURISTIC_STRONG_T || '0.75')
+      }
     );
     
     // Update metrics based on retrieval method
@@ -109,17 +145,27 @@ async function recommendHandler(req, res) {
           retrievalResult.results[0],
           { confidence: 0.6, reason: 'no_openai' }
         );
-        response.note = 'OpenAI not configured - showing best match';
+        response.note = 'מציג תוצאה ללא עיבוד נוסף';
       } else {
-        response = await synthesizeResponse(
-          searchQuery,
-          retrievalResult,
-          openai
-        );
+        try {
+          response = await synthesizeResponse(
+            searchQuery,
+            retrievalResult,
+            openai
+          );
+        } catch (llmError) {
+          console.error('❌ LLM synthesis failed:', llmError);
+          // Fallback to best heuristic result
+          response = formatDirectResponse(
+            retrievalResult.results[0],
+            { confidence: 0.7, reason: 'llm_error' }
+          );
+          response.note = 'מציג תוצאה מבוססת חיפוש';
+        }
       }
     }
     
-    // Add match reasons
+    // Add match reasons in Hebrew
     response.matchReasons = formatMatchReasons(
       retrievalResult.queryAnalysis,
       retrievalResult.results
@@ -134,9 +180,9 @@ async function recommendHandler(req, res) {
     // Update average latency
     metrics.avgLatency = (metrics.avgLatency * (metrics.total - 1) + response.timing) / metrics.total;
     
-    console.log(`✅ Response generated in ${response.timing}ms (${response.method})`);
+    console.log(`✅ Response generated in ${response.timing}ms (${response.method || retrievalResult.method})`);
     
-    // Format response to match existing API structure
+    // Format response to match expected API structure
     const formattedResponse = {
       success: true,
       inquiry: searchQuery,
@@ -155,9 +201,14 @@ async function recommendHandler(req, res) {
       }
     };
     
-    // Add semantic completion badge flag
+    // Add semantic completion badge flag if vector/LLM was primary
     if (retrievalResult.method === 'vector' || response.method === 'llm_synthesis') {
       formattedResponse.semantic_completion = true;
+    }
+    
+    // Add note if present
+    if (response.note) {
+      formattedResponse.note = response.note;
     }
     
     res.json(formattedResponse);
@@ -170,23 +221,31 @@ async function recommendHandler(req, res) {
       success: false,
       error: 'Search failed',
       message: error.message,
-      fallback_suggestion: 'Please try a simpler query'
+      fallback_suggestion: 'אנא נסו שאילתה פשוטה יותר',
+      debug: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
 
 /**
- * Get current metrics
+ * Get current metrics (exported for status endpoint)
  */
-function getMetrics() {
+export function getMetrics() {
   return {
     ...metrics,
     llmSkipRate: metrics.total > 0 ? (metrics.llmSkipped / metrics.total) : 0,
-    errorRate: metrics.total > 0 ? (metrics.errors / metrics.total) : 0
+    errorRate: metrics.total > 0 ? (metrics.errors / metrics.total) : 0,
+    cacheStats: getCache().getStats()
   };
 }
 
-module.exports = {
-  recommendHandler,
-  getMetrics
+// Vercel configuration
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '1mb'
+    },
+    responseLimit: '4mb'
+  },
+  maxDuration: 30 // 30 seconds for search with LLM
 };

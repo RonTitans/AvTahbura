@@ -3,7 +3,7 @@
  * Handles TTL-based caching for serverless environment
  */
 
-class IndexPackCache {
+export class IndexPackCache {
   constructor(ttlSeconds = 300) { // 5 minutes default
     this.cache = null;
     this.etag = null;
@@ -111,7 +111,7 @@ let cacheInstance = null;
  * @param {number} ttlSeconds - TTL in seconds
  * @returns {IndexPackCache} Cache instance
  */
-function getCache(ttlSeconds = 300) {
+export function getCache(ttlSeconds = 300) {
   if (!cacheInstance) {
     cacheInstance = new IndexPackCache(ttlSeconds);
   }
@@ -123,7 +123,7 @@ function getCache(ttlSeconds = 300) {
  * @param {object} indexPack - Index pack to estimate
  * @returns {object} Memory usage breakdown
  */
-function estimateMemoryUsage(indexPack) {
+export function estimateMemoryUsage(indexPack) {
   const usage = {
     metadata: 0,
     vectors: 0,
@@ -167,7 +167,7 @@ function estimateMemoryUsage(indexPack) {
  * @param {object} blobStorage - Blob storage module
  * @returns {function} Express middleware
  */
-function ensureIndexPack(blobStorage) {
+export function ensureIndexPack(blobStorage) {
   return async (req, res, next) => {
     const cache = getCache();
     let indexPack = cache.get();
@@ -209,7 +209,8 @@ function ensureIndexPack(blobStorage) {
   };
 }
 
-module.exports = {
+// Default export for convenience
+export default {
   IndexPackCache,
   getCache,
   estimateMemoryUsage,

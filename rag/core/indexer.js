@@ -3,16 +3,16 @@
  * Creates searchable index with embeddings and inverted indices
  */
 
-const { normalizeHebrew, buildDocumentText, extractBusLines } = require('./normalizer');
-const { analyzeQuery, extractLocations, extractOperators, classifyTopic } = require('./analyzer');
-const crypto = require('crypto');
+import { normalizeHebrew, buildDocumentText, extractBusLines } from './normalizer.js';
+import { analyzeQuery, extractLocations, extractOperators, classifyTopic } from './analyzer.js';
+import crypto from 'crypto';
 
 /**
  * Generate hash for content comparison (delta updates)
  * @param {object} row - Row data
  * @returns {string} Content hash
  */
-function generateRowHash(row) {
+export function generateRowHash(row) {
   const content = JSON.stringify({
     inquiry: row['הפניה'] || '',
     response: row['תיאור'] || row['תמצית'] || '',
@@ -26,7 +26,7 @@ function generateRowHash(row) {
  * @param {array} documents - Array of processed documents
  * @returns {object} Inverted indices
  */
-function buildInvertedIndices(documents) {
+export function buildInvertedIndices(documents) {
   const indices = {
     busLines: {},      // line -> [docIds]
     locations: {},     // location -> [docIds]
@@ -99,7 +99,7 @@ function buildInvertedIndices(documents) {
  * @param {array} documents - Array of processed documents
  * @returns {object} TF-IDF weights
  */
-function calculateTFIDF(documents) {
+export function calculateTFIDF(documents) {
   const docCount = documents.length;
   const termDocFreq = {}; // term -> number of docs containing it
   const tfIdf = [];
@@ -142,7 +142,7 @@ function calculateTFIDF(documents) {
  * @param {object} previousHashes - Previous document hashes for delta updates
  * @returns {object} Processed documents and metadata
  */
-async function processDocuments(rawData, previousHashes = {}) {
+export async function processDocuments(rawData, previousHashes = {}) {
   const documents = [];
   const hashes = {};
   const changedRows = [];
@@ -235,7 +235,7 @@ async function processDocuments(rawData, previousHashes = {}) {
  * @param {object} existingEmbeddings - Existing embeddings to reuse
  * @returns {array} Array of embeddings
  */
-async function generateEmbeddings(documents, openai, existingEmbeddings = {}) {
+export async function generateEmbeddings(documents, openai, existingEmbeddings = {}) {
   const embeddings = [];
   const model = process.env.EMBED_MODEL || 'text-embedding-3-small';
   const batchSize = 20;
@@ -298,7 +298,7 @@ async function generateEmbeddings(documents, openai, existingEmbeddings = {}) {
  * @param {object} previousPack - Previous index pack for delta updates
  * @returns {object} Complete index pack
  */
-async function buildIndexPack(rawData, openai = null, previousPack = null) {
+export async function buildIndexPack(rawData, openai = null, previousPack = null) {
   const startTime = Date.now();
   
   // Process documents
@@ -373,7 +373,8 @@ async function buildIndexPack(rawData, openai = null, previousPack = null) {
   return indexPack;
 }
 
-module.exports = {
+// Default export for convenience
+export default {
   generateRowHash,
   buildInvertedIndices,
   calculateTFIDF,

@@ -3,13 +3,13 @@
  * Reads from Google Sheets and creates searchable index with embeddings
  */
 
-const { google } = require('googleapis');
-const { GoogleAuth } = require('google-auth-library');
-const { buildIndexPack } = require('../rag/core/indexer');
-const { uploadIndexPack, downloadIndexPack } = require('../rag/storage/blob');
-const { getCache } = require('../rag/storage/cache');
-const OpenAI = require('openai');
-const fs = require('fs').promises;
+import { google } from 'googleapis';
+import { GoogleAuth } from 'google-auth-library';
+import { buildIndexPack } from '../rag/core/indexer.js';
+import { uploadIndexPack, downloadIndexPack } from '../rag/storage/blob.js';
+import { getCache } from '../rag/storage/cache.js';
+import OpenAI from 'openai';
+import { promises as fs } from 'fs';
 
 // Initialize OpenAI if available
 let openai = null;
@@ -20,14 +20,35 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 /**
- * Authenticate with Google Sheets
+ * Authenticate with Google Sheets using environment variable
  */
 async function authenticateGoogleSheets() {
   try {
-    const auth = new GoogleAuth({
-      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    });
+    let auth;
+    
+    // Check for JSON credentials in environment variable (Vercel)
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+      auth = new GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+      });
+    }
+    // Fallback to file-based credentials (local dev)
+    else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      // Check if file exists for local development
+      try {
+        await fs.access(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        auth = new GoogleAuth({
+          keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        });
+      } catch {
+        throw new Error('Credentials file not found: ' + process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      }
+    } else {
+      throw new Error('No Google credentials configured. Set GOOGLE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS');
+    }
     
     const authClient = await auth.getClient();
     const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -99,13 +120,47 @@ async function loadDataFromSheets() {
 }
 
 /**
- * Main refresh handler
+ * Main refresh handler for Vercel
  */
-async function refreshHandler(req, res) {
+export default async function handler(req, res) {
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ 
+      error: 'Method not allowed. Use POST.' 
+    });
+  }
+
+  // Check for dry run mode
+  const isDryRun = req.query.dryRun === 'true';
+  
+  return refreshHandler(req, res, isDryRun);
+}
+
+/**
+ * Internal refresh handler
+ */
+async function refreshHandler(req, res, isDryRun = false) {
   const startTime = Date.now();
   
+  // Validate required environment variables
+  if (!process.env.SPREADSHEET_ID) {
+    return res.status(500).json({
+      success: false,
+      error: 'SPREADSHEET_ID not configured',
+      hint: 'Add SPREADSHEET_ID to environment variables'
+    });
+  }
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN && !isDryRun) {
+    return res.status(500).json({
+      success: false,
+      error: 'BLOB_READ_WRITE_TOKEN not configured',
+      hint: 'Add BLOB_READ_WRITE_TOKEN to environment variables for upload'
+    });
+  }
+  
   try {
-    console.log('\n🔄 Starting Index Pack refresh...');
+    console.log(`\n🔄 Starting Index Pack refresh${isDryRun ? ' (DRY RUN)' : ''}...`);
     
     // Step 1: Load data from Google Sheets
     const rawData = await loadDataFromSheets();
@@ -123,6 +178,40 @@ async function refreshHandler(req, res) {
     
     // Step 3: Build new Index Pack
     const indexPack = await buildIndexPack(rawData, openai, previousPack);
+    
+    // Check if dry run
+    if (isDryRun) {
+      // Estimate sizes without uploading
+      const estimatedSizes = {
+        metadata: JSON.stringify(indexPack.metadata || {}).length,
+        documents: JSON.stringify(indexPack.documents || []).length,
+        indices: JSON.stringify(indexPack.indices || {}).length,
+        vectors: indexPack.vectors ? indexPack.vectors.length * 1536 * 4 : 0,
+        total: 0
+      };
+      estimatedSizes.total = Object.values(estimatedSizes).reduce((a, b) => a + b, 0);
+      
+      return res.json({
+        success: true,
+        dryRun: true,
+        message: 'Dry run completed - no data uploaded',
+        stats: {
+          rows_processed: indexPack.rowCount,
+          documents_indexed: indexPack.documents.length,
+          changed_rows: indexPack.stats.changedRows,
+          embeddings_generated: indexPack.vectors ? indexPack.vectors.filter(v => v !== null).length : 0,
+          index_sizes: indexPack.stats.indexSizes,
+          build_time_ms: Date.now() - startTime
+        },
+        estimatedSizes: {
+          metadata: `${(estimatedSizes.metadata / 1024).toFixed(2)} KB`,
+          documents: `${(estimatedSizes.documents / 1024 / 1024).toFixed(2)} MB`,
+          indices: `${(estimatedSizes.indices / 1024).toFixed(2)} KB`,
+          vectors: `${(estimatedSizes.vectors / 1024 / 1024).toFixed(2)} MB`,
+          total: `${(estimatedSizes.total / 1024 / 1024).toFixed(2)} MB`
+        }
+      });
+    }
     
     // Step 4: Upload to Blob storage
     const uploadResult = await uploadIndexPack(indexPack);
@@ -163,20 +252,20 @@ async function refreshHandler(req, res) {
   }
 }
 
-/**
- * Force refresh (ignore cache)
- */
-async function forceRefreshHandler(req, res) {
-  // Clear cache first
-  const cache = getCache();
-  cache.clear();
-  
-  // Run normal refresh
-  return refreshHandler(req, res);
-}
+// Export helper functions for testing
+export {
+  authenticateGoogleSheets,
+  loadDataFromSheets,
+  refreshHandler
+};
 
-module.exports = {
-  refreshHandler,
-  forceRefreshHandler,
-  loadDataFromSheets
+// Vercel configuration
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb'
+    },
+    responseLimit: '10mb'
+  },
+  maxDuration: 60 // 60 seconds for building index
 };
