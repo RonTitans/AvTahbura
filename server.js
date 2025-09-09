@@ -20,8 +20,11 @@ import {
 import { normalizeHebrew, extractBusLines } from './rag/core/normalizer.js';
 import { analyzeQuery } from './rag/core/analyzer.js';
 import { hybridRetrieve as hybridRetrieval } from './rag/core/retriever.js';
-import { shouldSkipLLM as shouldUseLLM } from './rag/llm/gating.js';
-import { synthesizeResponse } from './rag/llm/synthesis.js';
+import { shouldSkipLLM as shouldUseLLM, formatDirectResponse } from './rag/llm/gating.js';
+import { synthesizeResponse, formatMatchReasons } from './rag/llm/synthesis.js';
+import { getCache } from './rag/storage/cache.js';
+import { downloadIndexPack, uploadIndexPack, checkIndexPack } from './rag/storage/blob.js';
+import { buildIndexPack } from './rag/core/indexer.js';
 import integrationsRouter from './routes/integrations.js';
 import authSupabaseRouter from './routes/auth-supabase.js';
 import { loadConfig } from './utils/encryption.js';
@@ -1972,11 +1975,174 @@ app.post('/smart-search', async (req, res) => {
   }
 });
 
-// REMOVED: Old /api/recommend endpoint - now using /api/rag-recommend
-// The new endpoint is in /api/rag-recommend.js as a Vercel serverless function
+// ============================================
+// NEW RAG ENDPOINTS
+// ============================================
 
-// REMOVED: Old /api/status endpoint - now using /api/rag-status
-// The new endpoint is in /api/rag-status.js as a Vercel serverless function
+// RAG Status endpoint
+app.get('/api/rag-status', async (req, res) => {
+  try {
+    const cache = getCache();
+    const cacheStats = cache.getStats();
+    const indexPack = cache.get();
+    
+    let blobStatus = { exists: false };
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        blobStatus = await checkIndexPack();
+      } catch (error) {
+        blobStatus = { exists: false, error: error.message };
+      }
+    }
+    
+    res.json({
+      status: 'operational',
+      timestamp: new Date().toISOString(),
+      indexPack: {
+        loaded: !!indexPack,
+        documentCount: indexPack?.documents?.length || 0,
+        cacheValid: cacheStats.isValid
+      },
+      blobStorage: {
+        configured: !!process.env.BLOB_READ_WRITE_TOKEN,
+        ...blobStatus
+      },
+      configuration: {
+        openai: !!process.env.OPENAI_API_KEY,
+        googleSheets: !!(process.env.GOOGLE_CREDENTIALS_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS),
+        spreadsheetId: !!process.env.SPREADSHEET_ID
+      }
+    });
+  } catch (error) {
+    console.error('Error in /api/rag-status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// RAG Refresh endpoint - Build index from Google Sheets
+app.post('/api/rag-refresh', async (req, res) => {
+  try {
+    console.log('🔄 Starting RAG index refresh...');
+    
+    // Check for required config
+    if (!process.env.SPREADSHEET_ID) {
+      return res.status(500).json({
+        success: false,
+        error: 'SPREADSHEET_ID not configured'
+      });
+    }
+    
+    // Load data from Google Sheets (reuse existing function)
+    const rawData = await loadDataFromSheets();
+    
+    // Build index pack
+    console.log('📦 Building index pack...');
+    const indexPack = await buildIndexPack(rawData, openai, null);
+    
+    // Upload to blob if configured
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      console.log('☁️ Uploading to Vercel Blob...');
+      const uploadResult = await uploadIndexPack(indexPack);
+      
+      // Clear cache to force reload
+      const cache = getCache();
+      cache.clear();
+      
+      res.json({
+        success: true,
+        message: 'Index pack refreshed and uploaded',
+        stats: {
+          documents: indexPack.documents.length,
+          uploadedAt: uploadResult.timestamp
+        }
+      });
+    } else {
+      // Just keep in memory
+      const cache = getCache();
+      cache.set(indexPack, 'local-' + Date.now());
+      
+      res.json({
+        success: true,
+        message: 'Index pack refreshed (in-memory only)',
+        stats: {
+          documents: indexPack.documents.length
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error in /api/rag-refresh:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// RAG Recommend endpoint - Enhanced search
+app.post('/api/rag-recommend', async (req, res) => {
+  try {
+    const { query, inquiry_text } = req.body;
+    const searchQuery = query || inquiry_text;
+    
+    if (!searchQuery) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing query parameter'
+      });
+    }
+    
+    // Get or load index pack
+    const cache = getCache();
+    let indexPack = cache.get();
+    
+    if (!indexPack && process.env.BLOB_READ_WRITE_TOKEN) {
+      console.log('📥 Loading index from Blob...');
+      const downloaded = await downloadIndexPack();
+      if (downloaded && !downloaded.unchanged) {
+        cache.set(downloaded, downloaded.etag);
+        indexPack = downloaded;
+      }
+    }
+    
+    if (!indexPack) {
+      return res.status(503).json({
+        success: false,
+        error: 'Index not available. Run /api/rag-refresh first.'
+      });
+    }
+    
+    // Perform hybrid retrieval
+    const retrievalResult = await hybridRetrieval(searchQuery, indexPack, openai, { maxResults: 5 });
+    
+    // Check if we can skip LLM
+    const gatingDecision = shouldUseLLM(retrievalResult);
+    
+    let response;
+    if (gatingDecision.skip) {
+      response = formatDirectResponse(retrievalResult.results[0], gatingDecision);
+    } else if (openai) {
+      response = await synthesizeResponse(searchQuery, retrievalResult, openai);
+    } else {
+      response = formatDirectResponse(retrievalResult.results[0], { confidence: 0.6 });
+    }
+    
+    res.json({
+      success: true,
+      inquiry: searchQuery,
+      answer: response.answer,
+      confidence: response.confidence,
+      method: retrievalResult.method,
+      sources: response.sources || []
+    });
+    
+  } catch (error) {
+    console.error('Error in /api/rag-recommend:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
