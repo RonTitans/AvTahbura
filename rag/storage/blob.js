@@ -148,10 +148,28 @@ export async function uploadIndexPack(indexPack) {
  */
 export async function downloadIndexPack(etag = null) {
   try {
-    // Check metadata first
-    const metaResponse = await fetch(`${process.env.BLOB_URL || ''}/${INDEX_PACK_PREFIX}${METADATA_FILE}`);
-    if (!metaResponse.ok) {
+    // List all blobs to find our files
+    const { blobs } = await list({
+      prefix: INDEX_PACK_PREFIX,
+      limit: 10
+    });
+    
+    if (!blobs || blobs.length === 0) {
       console.log('⚠️ No Index Pack found in Blob storage');
+      return null;
+    }
+    
+    // Find metadata blob
+    const metaBlob = blobs.find(b => b.pathname.endsWith(METADATA_FILE));
+    if (!metaBlob) {
+      console.log('⚠️ No metadata file found in Blob storage');
+      return null;
+    }
+    
+    // Fetch metadata using the blob URL
+    const metaResponse = await fetch(metaBlob.url);
+    if (!metaResponse.ok) {
+      console.log('⚠️ Failed to fetch metadata from Blob storage');
       return null;
     }
     
@@ -167,9 +185,11 @@ export async function downloadIndexPack(etag = null) {
     const indexPack = { metadata, etag: currentETag };
     
     // Download vectors
-    try {
-      const vectorResponse = await fetch(`${process.env.BLOB_URL || ''}/${INDEX_PACK_PREFIX}${VECTORS_FILE}`);
-      if (vectorResponse.ok) {
+    const vectorBlob = blobs.find(b => b.pathname.endsWith(VECTORS_FILE));
+    if (vectorBlob) {
+      try {
+        const vectorResponse = await fetch(vectorBlob.url);
+        if (vectorResponse.ok) {
         const vectorBuffer = await vectorResponse.arrayBuffer();
         const floatArray = new Float32Array(vectorBuffer);
         
@@ -184,32 +204,45 @@ export async function downloadIndexPack(etag = null) {
           indexPack.vectors.push(Array.from(floatArray.slice(start, end)));
         }
         
-        console.log(`✅ Loaded ${numVectors} vectors from Blob`);
+          console.log(`✅ Loaded ${numVectors} vectors from Blob`);
+        }
+      } catch (err) {
+        console.warn('⚠️ Error loading vectors:', err.message);
       }
-    } catch (err) {
-      console.warn('⚠️ Vectors not found or error loading:', err.message);
+    } else {
+      console.log('⚠️ No vectors file found in Blob storage');
     }
     
     // Download indices
-    try {
-      const indicesResponse = await fetch(`${process.env.BLOB_URL || ''}/${INDEX_PACK_PREFIX}${INDICES_FILE}`);
-      if (indicesResponse.ok) {
-        indexPack.indices = await indicesResponse.json();
-        console.log('✅ Loaded indices from Blob');
+    const indicesBlob = blobs.find(b => b.pathname.endsWith(INDICES_FILE));
+    if (indicesBlob) {
+      try {
+        const indicesResponse = await fetch(indicesBlob.url);
+        if (indicesResponse.ok) {
+          indexPack.indices = await indicesResponse.json();
+          console.log('✅ Loaded indices from Blob');
+        }
+      } catch (err) {
+        console.warn('⚠️ Error loading indices:', err.message);
       }
-    } catch (err) {
-      console.warn('⚠️ Indices not found or error loading:', err.message);
+    } else {
+      console.log('⚠️ No indices file found in Blob storage');
     }
     
     // Download documents
-    try {
-      const docsResponse = await fetch(`${process.env.BLOB_URL || ''}/${INDEX_PACK_PREFIX}documents.json`);
-      if (docsResponse.ok) {
-        indexPack.documents = await docsResponse.json();
-        console.log(`✅ Loaded ${indexPack.documents.length} documents from Blob`);
+    const docsBlob = blobs.find(b => b.pathname.endsWith('documents.json'));
+    if (docsBlob) {
+      try {
+        const docsResponse = await fetch(docsBlob.url);
+        if (docsResponse.ok) {
+          indexPack.documents = await docsResponse.json();
+          console.log(`✅ Loaded ${indexPack.documents.length} documents from Blob`);
+        }
+      } catch (err) {
+        console.warn('⚠️ Error loading documents:', err.message);
       }
-    } catch (err) {
-      console.warn('⚠️ Documents not found or error loading:', err.message);
+    } else {
+      console.log('⚠️ No documents file found in Blob storage');
     }
     
     return indexPack;
