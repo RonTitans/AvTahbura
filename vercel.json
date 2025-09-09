@@ -4,21 +4,20 @@
     {
       "src": "server.js",
       "use": "@vercel/node"
-    }
-  ],
-  "functions": {
-    "api/*.js": {
-      "maxDuration": 60
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/rag-(.*)",
-      "destination": "/api/rag-$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "/server.js"
+      "src": "api/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/rag-(.*)",
+      "dest": "/api/rag-$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/server.js"
     }
   ],
   "env": {
