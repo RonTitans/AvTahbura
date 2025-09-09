@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  },
   "builds": [
     {
       "src": "server.js",
@@ -10,14 +15,14 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.+\\.(css|js|png|jpg|jpeg|gif|svg|ico))$",
-      "dest": "/public/$1"
+      "source": "/(.+\\.(css|js|png|jpg|jpeg|gif|svg|ico))$",
+      "destination": "/public/$1"
     },
     {
-      "src": "/(.*)",
-      "dest": "/server.js"
+      "source": "/((?!api/).*)",
+      "destination": "/server.js"
     }
   ],
   "env": {
