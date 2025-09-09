@@ -54,7 +54,8 @@ export async function uploadIndexPack(indexPack) {
       {
         access: 'public',
         contentType: 'application/json',
-        addRandomSuffix: false
+        addRandomSuffix: false,
+        allowOverwrite: true
       }
     );
     results.metadata = {
@@ -79,7 +80,8 @@ export async function uploadIndexPack(indexPack) {
         {
           access: 'public',
           contentType: 'application/octet-stream',
-          addRandomSuffix: false
+          addRandomSuffix: false,
+          allowOverwrite: true
         }
       );
       results.vectors = {
@@ -97,7 +99,8 @@ export async function uploadIndexPack(indexPack) {
         {
           access: 'public',
           contentType: 'application/json',
-          addRandomSuffix: false
+          addRandomSuffix: false,
+          allowOverwrite: true
         }
       );
       results.indices = {
@@ -114,7 +117,8 @@ export async function uploadIndexPack(indexPack) {
         {
           access: 'public',
           contentType: 'application/json',
-          addRandomSuffix: false
+          addRandomSuffix: false,
+          allowOverwrite: true
         }
       );
       results.documents = {
