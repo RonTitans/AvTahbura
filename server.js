@@ -2076,8 +2076,9 @@ app.post('/api/rag-refresh', async (req, res) => {
       });
     }
     
-    // Load data from Google Sheets (reuse existing function)
-    const rawData = await loadDataFromSheets();
+    // Load data from Google Sheets
+    await loadDataFromSheets(); // This loads into global municipalData
+    const rawData = municipalData; // Get from global variable
     console.log(`✅ Loaded ${rawData?.length || 0} rows from Google Sheets`);
     
     if (!rawData || rawData.length === 0) {
