@@ -2179,8 +2179,35 @@ app.post('/api/rag-recommend', async (req, res) => {
       });
     }
     
-    // Perform hybrid retrieval
-    const retrievalResult = await hybridRetrieval(searchQuery, indexPack, openai, { maxResults: 5 });
+    // Perform hybrid retrieval with error handling
+    let retrievalResult;
+    try {
+      retrievalResult = await hybridRetrieval(searchQuery, indexPack, openai, { maxResults: 5 });
+    } catch (retrievalError) {
+      console.error('Retrieval error:', retrievalError);
+      // Return simple fallback
+      return res.json({
+        success: true,
+        inquiry: searchQuery,
+        answer: 'מצטערים, אירעה שגיאה בחיפוש. אנא נסו שוב.',
+        confidence: 0.1,
+        sources: [],
+        method: 'error_fallback',
+        error_details: retrievalError.message
+      });
+    }
+    
+    // Check if we have results
+    if (!retrievalResult || !retrievalResult.results || retrievalResult.results.length === 0) {
+      return res.json({
+        success: true,
+        inquiry: searchQuery,
+        answer: 'לא נמצאו תוצאות רלוונטיות לשאילתה.',
+        confidence: 0.5,
+        sources: [],
+        method: 'no_results'
+      });
+    }
     
     // Check if we can skip LLM
     const gatingDecision = shouldUseLLM(retrievalResult);
