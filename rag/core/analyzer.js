@@ -286,16 +286,21 @@ function scoreContentQuality(document) {
   
   // Internal communication patterns (negative indicators)
   const internalPatterns = [
+    // Staff names at beginning of text (strong indicator of internal chat)
+    { pattern: /^(ראובן|אריאלה|אייל|ישראל|עידן|יונתן|שלמה|נפתלי|אינה|אורי|יוסי|רחל|משה|דניאל)\s+(שלום|היי|הי)/gm, weight: -0.6 },
     // Staff names commonly found in internal chats
-    { pattern: /ראובן|אריאלה|אייל|ישראל|עידן|מועלם|דניאל|יוסי|רחל|משה/g, weight: -0.3 },
+    { pattern: /ראובן|אריאלה|אייל|ישראל|עידן|מועלם|דניאל|יוסי|רחל|משה|יונתן|שלמה|נפתלי|אינה|אורי/g, weight: -0.3 },
     // Internal communication phrases
     { pattern: /בטיפול שלך|העבירי את זה|מבירור מול|טיפול שלך ושל|נמצא בטיפול/g, weight: -0.4 },
-    { pattern: /העבר ל|העברתי ל|מחכה ל|ממתין ל|בהמשך ל/g, weight: -0.3 },
-    { pattern: /שלום רב ל(?!ך)|היי |הי |אהלן/g, weight: -0.2 },
+    { pattern: /העבר ל|העברתי ל|מחכה ל|ממתין ל|בהמשך ל|העברתי במייל/g, weight: -0.3 },
+    { pattern: /צריך את החלטתכם|צריך לקבל התייחסות|צריך את עמדתו/g, weight: -0.4 },
+    { pattern: /היי |הי |אהלן/g, weight: -0.2 },
     // Status updates between staff
     { pattern: /טופל|בוצע|אושר על ידי|נשלח ל|קיבלתי את|ראיתי את/g, weight: -0.2 },
     // Questions between staff
-    { pattern: /מה הסטטוס|איפה זה עומד|יש עדכון|תעדכן אותי/g, weight: -0.3 }
+    { pattern: /מה הסטטוס|איפה זה עומד|יש עדכון|תעדכן אותי/g, weight: -0.3 },
+    // References to internal processes
+    { pattern: /מוצעת התשובה הבאה|אני מציע|כפי ש.*אמר|ע"פ הערות קודמות/g, weight: -0.3 }
   ];
   
   // Public response patterns (positive indicators)
@@ -318,6 +323,13 @@ function scoreContentQuality(document) {
   let score = 0.5; // Start with neutral score
   let internalMatches = 0;
   let publicMatches = 0;
+  
+  // Special check: if response starts with staff name greeting, it's very likely internal
+  const responseText = response || summary || '';
+  if (responseText && /^(ראובן|אריאלה|אייל|ישראל|עידן|יונתן|שלמה|נפתלי|אינה|אורי|יוסי|רחל|משה|דניאל)\s+(שלום|היי)/i.test(responseText.trim())) {
+    score -= 0.5; // Strong penalty for internal greeting at start
+    internalMatches += 5; // Count as significant internal indicator
+  }
   
   // Check internal patterns
   internalPatterns.forEach(({ pattern, weight }) => {
