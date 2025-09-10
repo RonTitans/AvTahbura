@@ -200,11 +200,37 @@ function buildDocumentText(row) {
   return parts.join(' · ');
 }
 
+/**
+ * Extract clean public response from mixed content
+ * @param {string} text - Input text that may contain internal communication
+ * @returns {string} Cleaned public response
+ */
+function extractPublicResponse(text) {
+  if (!text) return text;
+  
+  // Pattern to detect internal intro followed by suggested response
+  const mixedPattern = /^[^:]+:\s*(מוצעת התשובה הבאה|התשובה המוצעת|להלן התשובה|תשובה מוצעת):\s*/i;
+  if (mixedPattern.test(text)) {
+    // Extract the part after the "suggested response" marker
+    return text.replace(mixedPattern, '').trim();
+  }
+  
+  // Pattern for responses starting with staff name greeting
+  const staffGreeting = /^(ראובן|אריאלה|אייל|ישראל|עידן|יונתן|שלמה|נפתלי|אינה|אורי|יוסי|רחל|משה|דניאל)\s+(שלום|היי)[^:]*:\s*/i;
+  if (staffGreeting.test(text)) {
+    // Remove the staff greeting part
+    return text.replace(staffGreeting, '').trim();
+  }
+  
+  return text;
+}
+
 export {
   normalizeHebrew,
   extractBusLines,
   cleanBoilerplate,
   extractNGrams,
   normalizeQuery,
-  buildDocumentText
+  buildDocumentText,
+  extractPublicResponse
 };

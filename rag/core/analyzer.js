@@ -331,6 +331,13 @@ function scoreContentQuality(document) {
     internalMatches += 5; // Count as significant internal indicator
   }
   
+  // Check for mixed content pattern: internal intro followed by suggested response
+  if (responseText && /^[^,]+,?\s*(מוצעת התשובה הבאה|התשובה המוצעת|להלן התשובה|תשובה מוצעת)/i.test(responseText)) {
+    // This is mixed content - internal communication with embedded public response
+    score = 0.45; // Force into mixed_content range
+    internalMatches += 3;
+  }
+  
   // Check internal patterns
   internalPatterns.forEach(({ pattern, weight }) => {
     const matches = normalizedText.match(pattern);

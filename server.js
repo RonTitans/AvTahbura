@@ -17,7 +17,7 @@ import {
 } from './gpt-improvements.js';
 
 // Import RAG modules (converted to ES modules)
-import { normalizeHebrew, extractBusLines } from './rag/core/normalizer.js';
+import { normalizeHebrew, extractBusLines, extractPublicResponse } from './rag/core/normalizer.js';
 import { analyzeQuery } from './rag/core/analyzer.js';
 import { hybridRetrieve as hybridRetrieval } from './rag/core/retriever.js';
 import { shouldSkipLLM as shouldUseLLM, formatDirectResponse } from './rag/llm/gating.js';
@@ -1960,7 +1960,14 @@ app.post('/smart-search', async (req, res) => {
     if (returnMultiple) {
       const multipleResults = retrievalResult.results.map((result, index) => {
         const doc = result.document;
-        const preview = (doc.response || doc.summary || doc.inquiry || '').substring(0, 150);
+        let responseText = doc.response || doc.summary || '';
+        
+        // Clean mixed content if detected
+        if (result.qualityInfo && result.qualityInfo.classification === 'mixed_content') {
+          responseText = extractPublicResponse(responseText);
+        }
+        
+        const preview = responseText.substring(0, 150);
         
         return {
           id: index + 1,
@@ -1972,7 +1979,8 @@ app.post('/smart-search', async (req, res) => {
             warning: result.warning
           } : null,
           preview: preview + (preview.length >= 150 ? '...' : ''),
-          full_response: doc.response || doc.summary || '',
+          full_response: responseText,
+          original_response: doc.response || doc.summary || '', // Keep original for reference
           inquiry: doc.inquiry || '',
           matchType: result.matchType,
           busLines: doc.entities?.busLines || [],
@@ -2003,6 +2011,23 @@ app.post('/smart-search', async (req, res) => {
       !r.qualityInfo || r.qualityInfo.score >= 0.5
     );
     const resultsToUse = highQualityResults.length > 0 ? highQualityResults : retrievalResult.results;
+    
+    // Clean mixed content from top result
+    if (resultsToUse[0] && resultsToUse[0].document) {
+      const doc = resultsToUse[0].document;
+      if (resultsToUse[0].qualityInfo && 
+          (resultsToUse[0].qualityInfo.classification === 'mixed_content' || 
+           resultsToUse[0].qualityInfo.classification === 'internal_communication')) {
+        // Clean the response text
+        const cleanedResponse = extractPublicResponse(doc.response || doc.summary || '');
+        // Update the document with cleaned response
+        resultsToUse[0].document = {
+          ...doc,
+          response: cleanedResponse,
+          originalResponse: doc.response // Keep original
+        };
+      }
+    }
     
     // Check if we can skip LLM
     const gatingDecision = shouldUseLLM({ ...retrievalResult, results: resultsToUse });
