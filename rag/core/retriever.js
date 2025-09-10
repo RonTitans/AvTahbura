@@ -5,6 +5,7 @@
 
 import { normalizeHebrew, extractNGrams } from './normalizer.js';
 import { analyzeQuery } from './analyzer.js';
+import { selectBestResponse, groupByResponsePattern } from './selector.js';
 
 /**
  * Calculate cosine similarity between vectors
@@ -28,6 +29,7 @@ function cosineSimilarity(vec1, vec2) {
 
 /**
  * Stage 1: Exact matching with filters and quality consideration
+ * UPDATED: Match against inquiries, not responses
  */
 function exactMatch(queryAnalysis, indexPack, minQualityScore = 0.3) {
   const matches = [];
@@ -101,17 +103,18 @@ function exactMatch(queryAnalysis, indexPack, minQualityScore = 0.3) {
     }
   }
   
-  // Check for exact phrase matches
+  // Check for exact phrase matches IN INQUIRIES
   documents.forEach((doc, docId) => {
     if (matches.some(m => m.docId === docId)) return; // Already matched
     
     let phraseScore = 0;
+    const normalizedInquiry = normalizeHebrew(doc.inquiry || '');
+    
     queryNgrams.forEach(ngram => {
-      if (doc.normalizedText.includes(ngram)) {
-        // Higher score for longer phrases and matches in summary
-        const weight = ngram.split(' ').length * 0.2;
-        const fieldBoost = doc.summary.includes(ngram) ? 1.5 : 1.0;
-        phraseScore += weight * fieldBoost;
+      if (normalizedInquiry.includes(ngram)) {
+        // Higher score for longer phrases matching the inquiry
+        const weight = ngram.split(' ').length * 0.3;
+        phraseScore += weight;
       }
     });
     
@@ -130,6 +133,7 @@ function exactMatch(queryAnalysis, indexPack, minQualityScore = 0.3) {
 
 /**
  * Stage 2: BM25 scoring with adaptive weights and quality consideration
+ * UPDATED: Score based on inquiry similarity, not response
  */
 function bm25Score(queryAnalysis, indexPack, topN = 20, minQualityScore = 0.3) {
   const { documents, tfIdf, termDocFreq } = indexPack;
@@ -158,15 +162,16 @@ function bm25Score(queryAnalysis, indexPack, topN = 20, minQualityScore = 0.3) {
       )?.length || 0) * 1 +
       (queryAnalysis.entities?.topic === doc.entities?.topic ? 1 : 0);
     
-    // BM25 term scoring
+    // BM25 term scoring on INQUIRY text
+    const inquiryTokens = normalizeHebrew(doc.inquiry || '').split(/\s+/).filter(t => t.length > 1);
     const queryTerms = queryAnalysis.keywords || [];
     queryTerms.forEach(term => {
       const termNorm = normalizeHebrew(term);
-      const tf = doc.tokens?.filter(t => t === termNorm).length || 0;
+      const tf = inquiryTokens.filter(t => t === termNorm).length;
       if (tf > 0 && termDocFreq) {
         const idf = Math.log((documents.length - (termDocFreq[termNorm] || 0) + 0.5) / 
                             ((termDocFreq[termNorm] || 0) + 0.5));
-        const docLengthNorm = doc.tokens.length / avgDocLength;
+        const docLengthNorm = inquiryTokens.length / avgDocLength;
         const bm25 = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * docLengthNorm));
         score += bm25;
       }
@@ -241,7 +246,7 @@ async function vectorRerank(queryAnalysis, candidates, indexPack, openai) {
 }
 
 /**
- * Main hybrid retrieval pipeline with quality filtering
+ * Main hybrid retrieval pipeline with quality filtering and smart selection
  */
 async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   const startTime = Date.now();
@@ -249,7 +254,9 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
     maxResults = 5, 
     skipVector = false, 
     minQualityScore = 0.3,
-    returnMultiple = false 
+    returnMultiple = false,
+    groupResponses = true,
+    smartSelection = true
   } = options;
   
   // Analyze query
@@ -290,7 +297,20 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   
   if (uniqueMatches[0]?.score >= 0.85 || skipVector) {
     console.log(`✅ Found strong heuristic matches (${Date.now() - startTime}ms)`);
-    const results = uniqueMatches.slice(0, resultsToReturn);
+    let results = uniqueMatches.slice(0, resultsToReturn);
+    
+    // Apply smart selection if enabled and not returning multiple
+    if (smartSelection && !returnMultiple && results.length > 1) {
+      const best = selectBestResponse(results, queryAnalysis);
+      results = [best];
+      console.log(`🎯 Selected best match from ${uniqueMatches.length} candidates`);
+    }
+    
+    // Group by response pattern if enabled
+    if (groupResponses && results.length > 1) {
+      const grouped = groupByResponsePattern(results);
+      console.log(`📊 Grouped ${results.length} matches into ${grouped.length} response patterns`);
+    }
     
     // Add quality warnings
     results.forEach(result => {
@@ -316,7 +336,14 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   if (openai && !skipVector) {
     const reranked = await vectorRerank(queryAnalysis, uniqueMatches.slice(0, 20), indexPack, openai);
     console.log(`✅ Vector reranking complete (${Date.now() - startTime}ms)`);
-    const results = reranked.slice(0, resultsToReturn);
+    let results = reranked.slice(0, resultsToReturn);
+    
+    // Apply smart selection after reranking
+    if (smartSelection && !returnMultiple && results.length > 1) {
+      const best = selectBestResponse(results, queryAnalysis);
+      results = [best];
+      console.log(`🎯 Selected best match after vector reranking`);
+    }
     
     // Add quality warnings
     results.forEach(result => {

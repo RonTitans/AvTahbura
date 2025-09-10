@@ -2194,9 +2194,21 @@ app.post('/api/rag-refresh', async (req, res) => {
       });
     }
     
-    // Build index pack (optionally without embeddings for speed)
-    console.log(`📦 Building index pack${skipEmbeddings ? ' (no embeddings)' : ''}...`);
-    const indexPack = await buildIndexPack(rawData, skipEmbeddings ? null : openai, null);
+    // Build index pack with deduplication and cleaning
+    const deduplicate = req.query.deduplicate !== 'false'; // Default true
+    const cleanResponses = req.query.cleanResponses !== 'false'; // Default true
+    
+    console.log(`📦 Building index pack...`);
+    console.log(`   - Deduplication: ${deduplicate}`);
+    console.log(`   - Clean responses: ${cleanResponses}`);
+    console.log(`   - Skip embeddings: ${skipEmbeddings}`);
+    
+    const indexPack = await buildIndexPack(
+      rawData, 
+      skipEmbeddings ? null : openai, 
+      null,
+      { deduplicate, cleanResponses, skipEmbeddings }
+    );
     
     if (!indexPack || !indexPack.documents) {
       return res.status(500).json({

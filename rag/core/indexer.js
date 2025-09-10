@@ -1,10 +1,13 @@
 /**
  * Index Pack Builder for RAG System
  * Creates searchable index with embeddings and inverted indices
+ * Updated to handle deduplicated inquiry-response pairs
  */
 
 import { normalizeHebrew, buildDocumentText, extractBusLines } from './normalizer.js';
 import { analyzeQuery, extractLocations, extractOperators, classifyTopic, scoreContentQuality } from './analyzer.js';
+import { deduplicateByLatestDate } from '../preprocessing/deduplicate.js';
+import { cleanInquiryResponsePair } from '../preprocessing/cleaner.js';
 import crypto from 'crypto';
 
 /**
@@ -14,9 +17,10 @@ import crypto from 'crypto';
  */
 export function generateRowHash(row) {
   const content = JSON.stringify({
-    inquiry: row['הפניה'] || '',
-    response: row['תיאור'] || row['תמצית'] || '',
-    topic: row['נושא'] || ''
+    inquiryId: row['מזהה פניה'] || row.inquiry_id || '',
+    inquiry: row['הפניה'] || row.inquiry_text || '',
+    response: row['תיאור'] || row.response_text || '',
+    topic: row['נושא'] || row.topic || ''
   });
   return crypto.createHash('md5').update(content).digest('hex');
 }
@@ -140,16 +144,25 @@ export function calculateTFIDF(documents) {
  * Process raw data into searchable documents
  * @param {array} rawData - Raw data from spreadsheet
  * @param {object} previousHashes - Previous document hashes for delta updates
+ * @param {object} options - Processing options
  * @returns {object} Processed documents and metadata
  */
-export async function processDocuments(rawData, previousHashes = {}) {
+export async function processDocuments(rawData, previousHashes = {}, options = {}) {
+  const { deduplicate = true, cleanResponses = true } = options;
   const documents = [];
   const hashes = {};
   const changedRows = [];
   
-  console.log(`📄 Processing ${rawData.length} rows...`);
+  // Step 1: Deduplicate if enabled
+  let dataToProcess = rawData;
+  if (deduplicate) {
+    console.log(`🔄 Deduplicating ${rawData.length} rows...`);
+    dataToProcess = deduplicateByLatestDate(rawData);
+  }
   
-  rawData.forEach((row, index) => {
+  console.log(`📄 Processing ${dataToProcess.length} unique inquiries...`);
+  
+  dataToProcess.forEach((row, index) => {
     // Generate hash for delta detection
     const hash = generateRowHash(row);
     const caseId = row['מזהה פניה'] || row['case_id'] || `ROW_${index + 2}`;
@@ -161,16 +174,23 @@ export async function processDocuments(rawData, previousHashes = {}) {
       changedRows.push(caseId);
     }
     
-    // Build document text
-    const docText = buildDocumentText(row);
+    // Clean inquiry-response pair if enabled
+    let processedRow = row;
+    if (cleanResponses) {
+      processedRow = cleanInquiryResponsePair(row);
+    }
+    
+    // Build document text (prioritize inquiry for matching)
+    const inquiryText = processedRow.inquiry_text || row['הפניה'] || '';
+    const responseText = processedRow.response_text || row['תיאור'] || '';
+    const docText = `${inquiryText} ${row['תמצית'] || ''}`; // Focus on inquiry for matching
     const normalizedText = normalizeHebrew(docText);
     
-    // Extract entities
-    const allText = `${row['הפניה'] || ''} ${row['תמצית'] || ''} ${row['תיאור'] || ''}`;
-    const busLines = extractBusLines(allText);
-    const locations = extractLocations(allText);
-    const operators = extractOperators(allText);
-    const topic = classifyTopic(allText);
+    // Extract entities FROM INQUIRY (not response)
+    const busLines = extractBusLines(inquiryText);
+    const locations = extractLocations(inquiryText);
+    const operators = extractOperators(inquiryText);
+    const topic = classifyTopic(inquiryText);
     
     // Tokenize for TF-IDF
     const tokens = normalizedText.split(/\s+/).filter(t => t.length > 1);
@@ -197,10 +217,11 @@ export async function processDocuments(rawData, previousHashes = {}) {
       rowNumber: actualRowNumber, // Use actual row number from data
       hash: hash,
       
-      // Original text fields
-      inquiry: row['הפניה'] || '',
+      // Separate inquiry and response fields
+      inquiry: processedRow.inquiry_text || row['הפניה'] || '',
+      response: processedRow.response_text || row['תיאור'] || '',
+      originalResponse: processedRow.original_response || row['תיאור'] || '',
       summary: row['תמצית'] || '',
-      response: row['תיאור'] || '',
       topic: row['נושא'] || '',
       
       // Processed text
@@ -259,6 +280,7 @@ export async function processDocuments(rawData, previousHashes = {}) {
 
 /**
  * Generate embeddings for documents (with delta optimization)
+ * IMPORTANT: Embed inquiries, not responses, for better matching
  * @param {array} documents - Array of documents
  * @param {object} openai - OpenAI client
  * @param {object} existingEmbeddings - Existing embeddings to reuse
@@ -286,7 +308,8 @@ export async function generateEmbeddings(documents, openai, existingEmbeddings =
   // Process in batches
   for (let i = 0; i < toEmbed.length; i += batchSize) {
     const batch = toEmbed.slice(i, i + batchSize);
-    const texts = batch.map(doc => doc.normalizedText);
+    // IMPORTANT: Embed inquiries for better query matching
+    const texts = batch.map(doc => normalizeHebrew(doc.inquiry || doc.normalizedText));
     
     try {
       const response = await openai.embeddings.create({
@@ -327,12 +350,17 @@ export async function generateEmbeddings(documents, openai, existingEmbeddings =
  * @param {object} previousPack - Previous index pack for delta updates
  * @returns {object} Complete index pack
  */
-export async function buildIndexPack(rawData, openai = null, previousPack = null) {
+export async function buildIndexPack(rawData, openai = null, previousPack = null, options = {}) {
   const startTime = Date.now();
+  const { deduplicate = true, cleanResponses = true, skipEmbeddings = false } = options;
   
-  // Process documents
+  // Process documents with deduplication and cleaning
   const previousHashes = previousPack?.hashes || {};
-  const { documents, hashes, changedRows, stats } = await processDocuments(rawData, previousHashes);
+  const { documents, hashes, changedRows, stats } = await processDocuments(
+    rawData, 
+    previousHashes,
+    { deduplicate, cleanResponses }
+  );
   
   // Build inverted indices
   const indices = buildInvertedIndices(documents);
