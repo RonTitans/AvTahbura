@@ -1922,10 +1922,17 @@ app.post('/smart-search', async (req, res) => {
       });
     }
     
-    // Perform hybrid retrieval
+    // Check if client wants multiple results
+    const returnMultiple = req.body.return_multiple || false;
+    
+    // Perform hybrid retrieval with quality filtering
     let retrievalResult;
     try {
-      retrievalResult = await hybridRetrieval(inquiry_text, indexPack, openai, { maxResults: 5 });
+      retrievalResult = await hybridRetrieval(inquiry_text, indexPack, openai, { 
+        maxResults: returnMultiple ? 5 : 3,
+        minQualityScore: 0.3,
+        returnMultiple: returnMultiple
+      });
     } catch (retrievalError) {
       console.error('Retrieval error:', retrievalError);
       return res.json({
@@ -1944,20 +1951,74 @@ app.post('/smart-search', async (req, res) => {
         inquiry: inquiry_text,
         answer: 'לא נמצאו תוצאות רלוונטיות לשאילתה.',
         confidence: 0.5,
-        sources: []
+        sources: [],
+        multiple_results: []
       });
     }
     
+    // If returning multiple results, format them differently
+    if (returnMultiple) {
+      const multipleResults = retrievalResult.results.map((result, index) => {
+        const doc = result.document;
+        const preview = (doc.response || doc.summary || doc.inquiry || '').substring(0, 150);
+        
+        return {
+          id: index + 1,
+          rowNumber: doc.rowNumber,
+          score: result.score.toFixed(2),
+          quality: result.qualityInfo ? {
+            score: result.qualityInfo.score.toFixed(2),
+            classification: result.qualityInfo.classification,
+            warning: result.warning
+          } : null,
+          preview: preview + (preview.length >= 150 ? '...' : ''),
+          full_response: doc.response || doc.summary || '',
+          inquiry: doc.inquiry || '',
+          matchType: result.matchType,
+          busLines: doc.entities?.busLines || [],
+          locations: doc.entities?.locations || []
+        };
+      });
+      
+      return res.json({
+        success: true,
+        inquiry: inquiry_text,
+        multiple_results: multipleResults,
+        total_results: multipleResults.length,
+        search_info: {
+          retrieval_method: retrievalResult.method,
+          timing: retrievalResult.timing,
+          quality_stats: {
+            public_responses: multipleResults.filter(r => r.quality?.classification === 'public_response').length,
+            mixed_content: multipleResults.filter(r => r.quality?.classification === 'mixed_content').length,
+            internal_comms: multipleResults.filter(r => r.quality?.classification === 'internal_communication').length
+          }
+        }
+      });
+    }
+    
+    // Single result mode (existing logic)
+    // Filter to prefer high-quality results
+    const highQualityResults = retrievalResult.results.filter(r => 
+      !r.qualityInfo || r.qualityInfo.score >= 0.5
+    );
+    const resultsToUse = highQualityResults.length > 0 ? highQualityResults : retrievalResult.results;
+    
     // Check if we can skip LLM
-    const gatingDecision = shouldUseLLM(retrievalResult);
+    const gatingDecision = shouldUseLLM({ ...retrievalResult, results: resultsToUse });
     
     let response;
     if (gatingDecision.skip) {
-      response = formatDirectResponse(retrievalResult.results[0], gatingDecision);
+      response = formatDirectResponse(resultsToUse[0], gatingDecision);
     } else if (openai) {
-      response = await synthesizeResponse(inquiry_text, retrievalResult, openai);
+      response = await synthesizeResponse(inquiry_text, { ...retrievalResult, results: resultsToUse }, openai);
     } else {
-      response = formatDirectResponse(retrievalResult.results[0], { confidence: 0.6 });
+      response = formatDirectResponse(resultsToUse[0], { confidence: 0.6 });
+    }
+    
+    // Add quality warning if needed
+    if (resultsToUse[0].qualityInfo && resultsToUse[0].qualityInfo.classification !== 'public_response') {
+      response.quality_warning = resultsToUse[0].warning;
     }
     
     // Return response matching UI expectations
@@ -1971,10 +2032,12 @@ app.post('/smart-search', async (req, res) => {
       source_rows: sources.map(s => s.rowNumber || s.row_number).filter(Boolean),
       method: response.method || retrievalResult.method,
       candidates_evaluated: retrievalResult.results?.length || 5,
+      quality_warning: response.quality_warning,
       search_info: {
         candidates_validated: retrievalResult.results?.length || 5,
         retrieval_method: retrievalResult.method,
-        llm_used: !gatingDecision.skip
+        llm_used: !gatingDecision.skip,
+        top_result_quality: resultsToUse[0].qualityInfo
       }
     });
     

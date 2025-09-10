@@ -4,7 +4,7 @@
  */
 
 import { normalizeHebrew, buildDocumentText, extractBusLines } from './normalizer.js';
-import { analyzeQuery, extractLocations, extractOperators, classifyTopic } from './analyzer.js';
+import { analyzeQuery, extractLocations, extractOperators, classifyTopic, scoreContentQuality } from './analyzer.js';
 import crypto from 'crypto';
 
 /**
@@ -179,6 +179,17 @@ export async function processDocuments(rawData, previousHashes = {}) {
     // This ensures consistency with how municipalData stores row numbers
     const actualRowNumber = row.row_number !== undefined ? row.row_number : (index + 2);
     
+    // Create base document for quality scoring
+    const baseDoc = {
+      inquiry: row['הפניה'] || '',
+      summary: row['תמצית'] || '',
+      response: row['תיאור'] || '',
+      topic: row['נושא'] || ''
+    };
+    
+    // Score content quality
+    const qualityAssessment = scoreContentQuality(baseDoc);
+    
     // Create document object
     const doc = {
       id: index,
@@ -205,6 +216,14 @@ export async function processDocuments(rawData, previousHashes = {}) {
         topic: topic
       },
       
+      // Quality assessment
+      quality: {
+        score: qualityAssessment.score,
+        classification: qualityAssessment.classification,
+        isPublicResponse: qualityAssessment.classification === 'public_response',
+        hasCompleteResponse: qualityAssessment.indicators.hasCompleteResponse
+      },
+      
       // Metadata
       createdAt: row['נוצר ב:'] || row['created_at'] || null,
       createdBy: row['נוצר על-ידי'] || row['created_by'] || null,
@@ -227,7 +246,13 @@ export async function processDocuments(rawData, previousHashes = {}) {
       changed: changedRows.length,
       withBusLines: documents.filter(d => d.entities.busLines.length > 0).length,
       withLocations: documents.filter(d => d.entities.locations.length > 0).length,
-      withOperators: documents.filter(d => d.entities.operators.length > 0).length
+      withOperators: documents.filter(d => d.entities.operators.length > 0).length,
+      qualityBreakdown: {
+        publicResponses: documents.filter(d => d.quality.classification === 'public_response').length,
+        mixedContent: documents.filter(d => d.quality.classification === 'mixed_content').length,
+        internalComms: documents.filter(d => d.quality.classification === 'internal_communication').length,
+        avgQualityScore: documents.reduce((sum, d) => sum + d.quality.score, 0) / documents.length
+      }
     }
   };
 }

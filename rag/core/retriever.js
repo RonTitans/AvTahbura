@@ -27,9 +27,9 @@ function cosineSimilarity(vec1, vec2) {
 }
 
 /**
- * Stage 1: Exact matching with filters
+ * Stage 1: Exact matching with filters and quality consideration
  */
-function exactMatch(queryAnalysis, indexPack) {
+function exactMatch(queryAnalysis, indexPack, minQualityScore = 0.3) {
   const matches = [];
   const { documents, indices } = indexPack;
   const queryNgrams = new Set(queryAnalysis.ngrams);
@@ -61,21 +61,41 @@ function exactMatch(queryAnalysis, indexPack) {
       const intersection = [...lineDocIds].filter(id => locationDocIds.has(id));
       
       intersection.forEach(docId => {
+        const doc = documents[docId];
+        // Apply quality boost/penalty
+        const qualityMultiplier = doc.quality ? (0.5 + doc.quality.score * 0.5) : 1.0;
+        
+        // Skip very low quality documents unless they're the only matches
+        if (doc.quality && doc.quality.score < minQualityScore) {
+          return; // Skip this document
+        }
+        
         matches.push({
           docId,
-          score: 1.0,
+          score: 1.0 * qualityMultiplier,
           matchType: 'exact_line_location',
-          document: documents[docId]
+          document: doc,
+          qualityInfo: doc.quality
         });
       });
     } else {
       // Just bus line matches
       lineDocIds.forEach(docId => {
+        const doc = documents[docId];
+        // Apply quality boost/penalty
+        const qualityMultiplier = doc.quality ? (0.5 + doc.quality.score * 0.5) : 1.0;
+        
+        // Skip very low quality documents
+        if (doc.quality && doc.quality.score < minQualityScore) {
+          return; // Skip this document
+        }
+        
         matches.push({
           docId,
-          score: 0.9, // Slightly lower than line+location
+          score: 0.9 * qualityMultiplier, // Slightly lower than line+location
           matchType: 'exact_line',
-          document: documents[docId]
+          document: doc,
+          qualityInfo: doc.quality
         });
       });
     }
@@ -109,9 +129,9 @@ function exactMatch(queryAnalysis, indexPack) {
 }
 
 /**
- * Stage 2: BM25 scoring with adaptive weights
+ * Stage 2: BM25 scoring with adaptive weights and quality consideration
  */
-function bm25Score(queryAnalysis, indexPack, topN = 20) {
+function bm25Score(queryAnalysis, indexPack, topN = 20, minQualityScore = 0.3) {
   const { documents, tfIdf, termDocFreq } = indexPack;
   
   // Check if required data exists
@@ -156,16 +176,27 @@ function bm25Score(queryAnalysis, indexPack, topN = 20) {
     const recencyBoost = doc.createdAt ? 
       Math.max(0, 1 - (Date.now() - new Date(doc.createdAt).getTime()) / (365 * 24 * 60 * 60 * 1000)) * 0.1 : 0;
     
+    // Quality adjustment
+    const qualityMultiplier = doc.quality ? (0.5 + doc.quality.score * 0.5) : 1.0;
+    const finalScore = (score + entityScore + recencyBoost) * qualityMultiplier;
+    
+    // Skip very low quality documents unless they have high relevance
+    if (doc.quality && doc.quality.score < minQualityScore && finalScore < 0.5) {
+      return null; // Will be filtered out
+    }
+    
     return {
       docId,
-      score: score + entityScore + recencyBoost,
+      score: finalScore,
       matchType: 'bm25',
       document: doc,
-      components: { bm25: score, entities: entityScore, recency: recencyBoost }
+      qualityInfo: doc.quality,
+      components: { bm25: score, entities: entityScore, recency: recencyBoost, quality: qualityMultiplier }
     };
   });
   
   return scores
+    .filter(s => s !== null) // Remove filtered out documents
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 }
@@ -210,11 +241,16 @@ async function vectorRerank(queryAnalysis, candidates, indexPack, openai) {
 }
 
 /**
- * Main hybrid retrieval pipeline
+ * Main hybrid retrieval pipeline with quality filtering
  */
 async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   const startTime = Date.now();
-  const { maxResults = 5, skipVector = false } = options;
+  const { 
+    maxResults = 5, 
+    skipVector = false, 
+    minQualityScore = 0.3,
+    returnMultiple = false 
+  } = options;
   
   // Analyze query
   const queryAnalysis = analyzeQuery(query);
@@ -224,9 +260,13 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
     type: queryAnalysis.queryType
   });
   
-  // Stage 1: Exact matching
-  const exactMatches = exactMatch(queryAnalysis, indexPack);
-  if (exactMatches.length > 0 && exactMatches[0].score >= 0.9) {
+  // Stage 1: Exact matching with quality filter
+  const exactMatches = exactMatch(queryAnalysis, indexPack, minQualityScore);
+  
+  // If returnMultiple is true, we want to get more candidates
+  const candidateCount = returnMultiple ? maxResults * 2 : maxResults;
+  
+  if (exactMatches.length > 0 && exactMatches[0].score >= 0.9 && !returnMultiple) {
     console.log(`✅ Found exact matches (${Date.now() - startTime}ms)`);
     return {
       results: exactMatches.slice(0, maxResults),
@@ -236,8 +276,8 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
     };
   }
   
-  // Stage 2: BM25 scoring
-  const bm25Matches = bm25Score(queryAnalysis, indexPack, 20);
+  // Stage 2: BM25 scoring with quality filter
+  const bm25Matches = bm25Score(queryAnalysis, indexPack, 20, minQualityScore);
   
   // Combine exact and BM25 matches
   const allMatches = [...exactMatches, ...bm25Matches];
@@ -245,13 +285,30 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
     new Map(allMatches.map(m => [m.docId, m])).values()
   ).sort((a, b) => b.score - a.score);
   
+  // For returnMultiple, always get more candidates
+  const resultsToReturn = returnMultiple ? candidateCount : maxResults;
+  
   if (uniqueMatches[0]?.score >= 0.85 || skipVector) {
     console.log(`✅ Found strong heuristic matches (${Date.now() - startTime}ms)`);
+    const results = uniqueMatches.slice(0, resultsToReturn);
+    
+    // Add quality warnings
+    results.forEach(result => {
+      if (result.qualityInfo) {
+        if (result.qualityInfo.classification === 'internal_communication') {
+          result.warning = 'תוכן פנימי - ייתכן שאינו מיועד לציבור';
+        } else if (result.qualityInfo.classification === 'mixed_content') {
+          result.warning = 'תוכן חלקי - ייתכן שחסר מידע';
+        }
+      }
+    });
+    
     return {
-      results: uniqueMatches.slice(0, maxResults),
+      results,
       method: 'heuristic',
       queryAnalysis,
-      timing: Date.now() - startTime
+      timing: Date.now() - startTime,
+      multipleResults: returnMultiple
     };
   }
   
@@ -259,19 +316,47 @@ async function hybridRetrieve(query, indexPack, openai = null, options = {}) {
   if (openai && !skipVector) {
     const reranked = await vectorRerank(queryAnalysis, uniqueMatches.slice(0, 20), indexPack, openai);
     console.log(`✅ Vector reranking complete (${Date.now() - startTime}ms)`);
+    const results = reranked.slice(0, resultsToReturn);
+    
+    // Add quality warnings
+    results.forEach(result => {
+      if (result.qualityInfo) {
+        if (result.qualityInfo.classification === 'internal_communication') {
+          result.warning = 'תוכן פנימי - ייתכן שאינו מיועד לציבור';
+        } else if (result.qualityInfo.classification === 'mixed_content') {
+          result.warning = 'תוכן חלקי - ייתכן שחסר מידע';
+        }
+      }
+    });
+    
     return {
-      results: reranked.slice(0, maxResults),
+      results,
       method: 'vector',
       queryAnalysis,
-      timing: Date.now() - startTime
+      timing: Date.now() - startTime,
+      multipleResults: returnMultiple
     };
   }
   
+  const results = uniqueMatches.slice(0, resultsToReturn);
+  
+  // Add quality warnings
+  results.forEach(result => {
+    if (result.qualityInfo) {
+      if (result.qualityInfo.classification === 'internal_communication') {
+        result.warning = 'תוכן פנימי - ייתכן שאינו מיועד לציבור';
+      } else if (result.qualityInfo.classification === 'mixed_content') {
+        result.warning = 'תוכן חלקי - ייתכן שחסר מידע';
+      }
+    }
+  });
+  
   return {
-    results: uniqueMatches.slice(0, maxResults),
+    results,
     method: 'heuristic',
     queryAnalysis,
-    timing: Date.now() - startTime
+    timing: Date.now() - startTime,
+    multipleResults: returnMultiple
   };
 }
 

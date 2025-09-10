@@ -274,6 +274,107 @@ function querySimilarity(analysis1, analysis2) {
   return factors > 0 ? score / factors : 0;
 }
 
+/**
+ * Score content quality to identify internal communications vs public responses
+ * @param {object} document - Document object with inquiry, summary, and response fields
+ * @returns {object} Quality assessment with score and classification
+ */
+function scoreContentQuality(document) {
+  const { inquiry, summary, response, topic } = document;
+  const fullText = `${inquiry || ''} ${summary || ''} ${response || ''}`;
+  const normalizedText = normalizeHebrew(fullText);
+  
+  // Internal communication patterns (negative indicators)
+  const internalPatterns = [
+    // Staff names commonly found in internal chats
+    { pattern: /ראובן|אריאלה|אייל|ישראל|עידן|מועלם|דניאל|יוסי|רחל|משה/g, weight: -0.3 },
+    // Internal communication phrases
+    { pattern: /בטיפול שלך|העבירי את זה|מבירור מול|טיפול שלך ושל|נמצא בטיפול/g, weight: -0.4 },
+    { pattern: /העבר ל|העברתי ל|מחכה ל|ממתין ל|בהמשך ל/g, weight: -0.3 },
+    { pattern: /שלום רב ל(?!ך)|היי |הי |אהלן/g, weight: -0.2 },
+    // Status updates between staff
+    { pattern: /טופל|בוצע|אושר על ידי|נשלח ל|קיבלתי את|ראיתי את/g, weight: -0.2 },
+    // Questions between staff
+    { pattern: /מה הסטטוס|איפה זה עומד|יש עדכון|תעדכן אותי/g, weight: -0.3 }
+  ];
+  
+  // Public response patterns (positive indicators)
+  const publicPatterns = [
+    // Formal greetings and closings
+    { pattern: /שלום רב|שלום וברכה|לכבוד|נכבדי|תושב יקר/g, weight: 0.3 },
+    { pattern: /בברכה|בכבוד רב|תודה על פנייתך|תודה על הפנייה/g, weight: 0.3 },
+    // Official response language
+    { pattern: /פנייתך התקבלה|בקשתך נבדקה|הנושא נבחן|לאחר בדיקה/g, weight: 0.4 },
+    { pattern: /אנו מתנצלים|לצערנו|נשמח לעדכן|נעדכן אותך/g, weight: 0.3 },
+    { pattern: /בהתאם ל|על פי|לפי הנהלים|בהתאם להנחיות/g, weight: 0.3 },
+    { pattern: /הוחלט|אושר|נדחה|התקבל|לא התקבל/g, weight: 0.3 },
+    // Complete sentences indicators
+    { pattern: /\. |\.$/g, weight: 0.1 },
+    // Reference to citizen/resident
+    { pattern: /התושב|הפונה|האזרח|תושבי|אזרחי/g, weight: 0.2 }
+  ];
+  
+  // Calculate scores
+  let score = 0.5; // Start with neutral score
+  let internalMatches = 0;
+  let publicMatches = 0;
+  
+  // Check internal patterns
+  internalPatterns.forEach(({ pattern, weight }) => {
+    const matches = normalizedText.match(pattern);
+    if (matches) {
+      score += weight * Math.min(matches.length, 3); // Cap impact per pattern
+      internalMatches += matches.length;
+    }
+  });
+  
+  // Check public patterns
+  publicPatterns.forEach(({ pattern, weight }) => {
+    const matches = normalizedText.match(pattern);
+    if (matches) {
+      score += weight * Math.min(matches.length, 3); // Cap impact per pattern
+      publicMatches += matches.length;
+    }
+  });
+  
+  // Length-based adjustments
+  const responseLength = (response || '').length;
+  if (responseLength < 50) {
+    score -= 0.2; // Very short responses are likely fragments
+  } else if (responseLength > 200) {
+    score += 0.1; // Longer responses are more likely to be complete
+  }
+  
+  // Check for incomplete response indicators
+  if (normalizedText.match(/^\.\.\.|\.\.\.$/)) {
+    score -= 0.2; // Ellipsis suggests incomplete
+  }
+  
+  // Ensure score is between 0 and 1
+  score = Math.max(0, Math.min(1, score));
+  
+  // Classify based on score
+  let classification;
+  if (score >= 0.7) {
+    classification = 'public_response';
+  } else if (score >= 0.4) {
+    classification = 'mixed_content';
+  } else {
+    classification = 'internal_communication';
+  }
+  
+  return {
+    score,
+    classification,
+    indicators: {
+      internalMatches,
+      publicMatches,
+      responseLength,
+      hasCompleteResponse: responseLength > 100 && publicMatches > internalMatches
+    }
+  };
+}
+
 export {
   extractLocations,
   extractOperators,
@@ -281,5 +382,6 @@ export {
   removeStopwords,
   extractKeyPhrases,
   analyzeQuery,
-  querySimilarity
+  querySimilarity,
+  scoreContentQuality
 };
